@@ -13,6 +13,7 @@
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "filesys/inode.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
 #include "userprog/exception.h"
@@ -27,6 +28,15 @@ struct semaphore sys_sema;
 void remove_fds (struct hash_elem *e, void *aux);
 void remove_id_addr_entry (struct hash_elem *e, void *aux UNUSED);
 void remove_child_info (struct hash_elem *e, void *aux UNUSED);
+
+/** NEW ADDED HERE **/
+static struct dir * thread_fd_to_dir (int fd);
+static bool thread_fd_is_dir (int fd);
+static bool chdir (const char *dir);
+static bool mkdir (const char *dir);
+static bool readdir (int fd, char *name);
+static bool isdir (int fd);
+static int inumber (int fd);
 
 void
 syscall_init (void)
@@ -183,6 +193,48 @@ syscall_handler (struct intr_frame *f)
             munmap((mapid_t)*(int *)args[0]);
             release_args(syscall, 1, args);
             break;
+        /** NEW ADDED HERE **/
+        case SYS_CHDIR: {
+           void *args[1];
+           retrieve_and_validate_args(syscall, 1, args);
+           char *buff_ptr = (char *)*(int *)args[0];
+           validate_pointer(buff_ptr, f->esp, /* Writeable */ false);
+           f->eax = chdir(buff_ptr);
+           unlock_args_memory(syscall, 1, args);
+           break;
+       }
+       case SYS_MKDIR: {
+           void *args[1];
+           retrieve_and_validate_args(syscall, 1, args);
+           char *buff_ptr = (char *)*(int *)args[0];
+           validate_pointer(buff_ptr, f->esp, /* Writeable */ false);
+           f->eax = mkdir(buff_ptr);
+           unlock_args_memory(syscall, 1, args);
+           break;
+       }
+       case SYS_READDIR: {
+           void *args[2];
+           retrieve_and_validate_args(syscall, 2, args);
+           char *buff_ptr = (char *)*(int *)args[1];
+           validate_buffer(buff_ptr, READDIR_MAX_LEN + 1, f->esp, true);
+           f->eax = readdir(*(int *)args[0], buff_ptr);
+           unlock_args_memory(syscall, 2, args);
+           break;
+       }
+       case SYS_ISDIR: {
+           void *args[1];
+           retrieve_and_validate_args(syscall, 1, args);
+           f->eax = isdir(*(int *)args[0]);
+           unlock_args_memory(syscall, 1, args);
+           break;
+       }
+       case SYS_INUMBER: {
+           void *args[1];
+           retrieve_and_validate_args(syscall, 1, args);
+           f->eax = inumber(*(int *)args[0]);
+           unlock_args_memory(syscall, 1, args);
+           break;
+       } 
     }
 }
 
@@ -243,15 +295,20 @@ void exit (int status) {
     struct thread* curr= thread_current();
     printf ("%s: exit(%d)\n", curr->name, status);
     hash_destroy(&curr->ht_id_addr, remove_id_addr_entry);
+
+    /** NEW ADDED HERE **/
+    if (curr->cwd)
+        dir_close(curr->cwd);
+
     hash_destroy(&curr->fds, remove_fds);
 
     lock_acquire(&ht_exec_to_threads_lock);
     delete_exe_to_threads_entry(curr);
     lock_release(&ht_exec_to_threads_lock);
 
-    lock_acquire(&filesys_lock);
+    //lock_acquire(&filesys_lock);
     file_close(curr->exe);
-    lock_release(&filesys_lock);
+    //lock_release(&filesys_lock);
 
     hash_destroy(&curr->page_table, remove_page);
 
@@ -274,9 +331,9 @@ void exit (int status) {
 }
 
 tid_t exec (const char *file_name){
-    lock_acquire(&filesys_lock);
+    //lock_acquire(&filesys_lock);
     tid_t pid = process_execute(file_name);
-    lock_release(&filesys_lock);
+    //lock_release(&filesys_lock);
     return pid;
 }
 
@@ -286,9 +343,9 @@ int wait (tid_t pid) {
 
 bool create (const char *file_name, unsigned initial_size) {
     if(!file_name) exit(-1);
-    lock_acquire(&filesys_lock);
+    //lock_acquire(&filesys_lock);
     int result = filesys_create(file_name, initial_size);
-    lock_release(&filesys_lock);
+    //lock_release(&filesys_lock);
     return result;
 }
 
@@ -296,8 +353,31 @@ int open (const char *file_name) {
     struct thread* curr = thread_current();
     if (hash_size(&curr->fds) == MAX_OPEN_FILES)
         return -1;
-    lock_acquire(&filesys_lock);
-    struct file* f_ptr = filesys_open(file_name);
+
+    /** NEW ADDED HERE **/
+    struct file* f_ptr = NULL;
+    struct dir* dir_ptr = NULL;
+    bool isdir = false;
+
+    //lock_acquire(&filesys_lock);
+    file* f_ptr = filesys_open(file_name, &file_ptr, &dir_ptr, &isdir);
+
+    if (!isdir) {
+        if (f_ptr == NULL){
+            return -1;
+        }
+    } else {
+        if (dir_ptr == NULL){
+            return -1;
+        }
+    }
+    struct file_desc *fd_open = malloc(sizeof(struct file_desc));
+    fd_open->fptr = f_ptr;
+    fd_open->dir_ptr = dir_ptr;
+    fd_open->isdir = isdir;
+    insert_fd(curr, fd_open);
+    return fd_open->fid; 
+    /*
     if (!f_ptr){
         lock_release(&filesys_lock);
         return -1;
@@ -307,6 +387,7 @@ int open (const char *file_name) {
     fd_open->fptr = f_ptr;
     insert_fd(curr, fd_open);
     return fd_open->fid; 
+    */
 }
 
 void insert_fd(struct thread *t, struct file_desc *fd) {
@@ -318,20 +399,20 @@ void insert_fd(struct thread *t, struct file_desc *fd) {
 }
 
  bool remove (const char *file_name) {
-    lock_acquire(&filesys_lock);
+    //lock_acquire(&filesys_lock);
     bool result = filesys_remove(file_name);
-    lock_release(&filesys_lock);
+    //lock_release(&filesys_lock);
     return result;
  }
 
  int filesize (int fd) {
-    lock_acquire(&filesys_lock);
+    // lock_acquire(&filesys_lock);
     struct file *fptr = get_file_by_id(fd);
     int fsize = -1;
     if (fptr != NULL) {
         fsize = file_length(fptr);
      }
-     lock_release(&filesys_lock);
+     // lock_release(&filesys_lock);
      return fsize;
   }
 
@@ -347,6 +428,19 @@ void insert_fd(struct thread *t, struct file_desc *fd) {
     return fd_ptr->fptr;
  }
 
+/** NEW ADDED HERE **/
+ static struct dir * thread_fd_to_dir (int fd) {
+    struct fd_to_file ftf;
+    struct fd_to_file *ftf_ptr ;
+    ftf.fd = fd;
+    struct hash_elem *e = hash_find(&thread_current()->fds, &ftf.elem);
+    if (e == NULL) {
+        return NULL;
+    }
+    ftf_ptr = hash_entry(e, struct fd_to_file, elem);
+    return ftf_ptr->dir_ptr;
+ }
+
 int read (int fd, void *buffer, unsigned length) {
 
     if (fd == STDOUT_FILENO){
@@ -360,14 +454,14 @@ int read (int fd, void *buffer, unsigned length) {
         release_buf(buffer, length);
         return length;
     } else {
-        lock_acquire(&filesys_lock);
+        // lock_acquire(&filesys_lock);
         struct file* fptr = get_file_by_id(fd);
         if (fptr == NULL){
-            lock_release(&filesys_lock);
+            // lock_release(&filesys_lock);
             return -1;
         }
         int result = file_read(fptr, buffer, length);
-        lock_release(&filesys_lock);
+        // lock_release(&filesys_lock);
         return result;
     }
 
@@ -397,7 +491,8 @@ int write (int fd, const void *buffer, unsigned length) {
             release_buf(buffer, length);
             return length;
         };
-        return 0;
+        return -1;
+        // return 0;
     }
 }
 
@@ -410,42 +505,50 @@ void close (int fid) {
         return;  
     } else {
         struct file_desc* fdp = hash_entry(elem, struct file_desc, elem);
-        lock_acquire(&filesys_lock);
-        file_close(fdp->fptr);
-        lock_release(&filesys_lock);
+        
+        if (fdp->fptr){
+            file_close(fdp->fptr);
+        } else {
+            dir_close(fdp->dir_ptr);
+        }
+
+        // lock_acquire(&filesys_lock);
+        // file_close(fdp->fptr);
+        // lock_release(&filesys_lock);
         free(fdp);
     } 
 }
 
 void seek (int fd, unsigned pos) {
-    lock_acquire(&filesys_lock);
+    // lock_acquire(&filesys_lock);
     struct file *fptr = get_file_by_id(fd);
     if (!fptr){
-        lock_release(&filesys_lock);
+        // lock_release(&filesys_lock);
         return;
     }
     file_seek(fptr, pos);
-    lock_release(&filesys_lock);
+    // lock_release(&filesys_lock);
 }
 
 unsigned tell (int fd) {
-    lock_acquire(&filesys_lock);
+    // lock_acquire(&filesys_lock);
     struct file* fptr = get_file_by_id(fd);
     if (!fptr){
-        lock_release(&filesys_lock);
+        // lock_release(&filesys_lock);
         return -1;
     }
     unsigned pos = file_tell(fptr);
-    lock_release(&filesys_lock);
+    // lock_release(&filesys_lock);
     return pos;
 }
 
 void remove_fds (struct hash_elem *e, void *aux) {
-    struct lock *fd_lock = (struct lock *) aux;
+    // struct lock *fd_lock = (struct lock *) aux;
     struct file_desc *fdp = hash_entry (e, struct file_desc, elem);
-    lock_acquire(fd_lock);
+    // lock_acquire(fd_lock);
     file_close(fdp->fptr);
-    lock_release(fd_lock);
+    dir_close(fdp->dir_ptr);
+    // lock_release(fd_lock);
     free(fdp);
 }
 
@@ -486,8 +589,6 @@ mapid_t mmap (int fd, void *addr) {
         page_cnt++;
     }
 
-
-
     struct thread *curr = thread_current();
 
     void *exist_addr = addr;
@@ -500,9 +601,9 @@ mapid_t mmap (int fd, void *addr) {
         exist_cnt++;
     }
 
-    lock_acquire(&filesys_lock);
+    // lock_acquire(&filesys_lock);
     struct file *re_fptr = file_reopen(fptr);
-    lock_release(&filesys_lock);
+    // lock_release(&filesys_lock);
     if(!re_fptr) return MAP_FAILED;
 
     int offset = 0;
@@ -568,4 +669,64 @@ void munmap_helper (struct id_addr *id, struct thread *t) {
         
     }
     hash_delete(&t->ht_id_addr, &id->elem);
+}
+
+
+/* Changes the current working directory of the process to dir, which
++   may be relative or absolute. Returns true if successful, false on failure. */
++static bool chdir (const char *dir) {
+   bool success = filesys_chdir(dir);
+   return success;
+ }
+
+/* Creates the directory named dir, which may be relative or absolute.
+   Returns true if successful, false on failure. Fails if dir already
+   exists or if any directory name in dir, besides the last, does not
+   already exist. That is, mkdir("/a/b/c") succeeds only if /a/b
+   already exists and /a/b/c does not. */
+static bool mkdir (const char *dir) {
+
+   /* Initially a directory has two entries "." and ".." */
+   bool success = filesys_create(dir, 2 * DIR_ENTRY, true);
+
+   return success;
+}
+
+/* Reads a directory entry from file descriptor fd, which must
+   represent a directory. If successful, stores the null-terminated
+   file name in name, which must have room for READDIR_MAX_LEN  1
+   bytes, and returns true. If no entries are left in the directory,
+   returns false.
+   . and .. should not be returned by readdir. */
+static bool readdir (int fd, char *name) {
+   if (!thread_fd_is_dir(fd)) return false;
+
+   struct dir *dir = thread_fd_to_dir(fd);
+   if (dir == NULL) return false;
+
+   do{
+     if (!dir_readdir(dir, name)) return false;
+   }while((strcmp(name, ".") == 0) || (strcmp(name, "..") == 0));
+
+   return true;
+}
+
+/* Returns true if fd represents a directory, false if it represents
+   an ordinary file. */
+static bool isdir (int fd) {
+   return thread_fd_is_dir(fd);
+}
+
+/* Returns the inode number of the inode associated with fd, which may
+   represent an ordinary file or a directory. */
+static int inumber (int fd) {
+   if (thread_fd_is_dir(fd)) {
+       struct dir *dir = thread_fd_to_dir(fd);
+       ASSERT (dir != NULL);
+       return inode_get_inumber(dir_get_inode(dir));
+   } else {
+       struct file *file = thread_fd_to_file(fd);
+       ASSERT (file != NULL);
+       return inode_get_inumber(file_get_inode(file));
+   }
 }

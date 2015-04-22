@@ -9,6 +9,8 @@
 #include "threads/vaddr.h"
 #include "vm/page.h"
 
+#include "filesys/cache.h"
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -180,6 +182,8 @@ page_fault (struct intr_frame *f)
   if (result == false) 
       exit (-1);
 
-  if (user == false)
+  if (user == false){
+    set_cache_exiting();
     kill (f);
+  }
 }

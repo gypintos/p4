@@ -14,6 +14,8 @@ enum thread_status
     THREAD_READY,       /* Not running but ready to run. */
     THREAD_BLOCKED,     /* Waiting for an event to trigger. */
     THREAD_DYING        /* About to be destroyed. */
+    /** NEW ADDED HERE **/
+    THREAD_SLEEPING     /* Sleeping. */
   };
 
 enum child_state
@@ -99,6 +101,8 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
+    /** NEW ADDED HERE **/
+    int64_t alarm;            /* Expected wake time, if sleeping */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -125,6 +129,8 @@ struct thread
 #endif
     
     struct hash page_table;             /* Supplemental page table */
+    /** NEW ADDED HERE **/
+    struct dir *cwd;                    /* Pointer to current working dir */
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
@@ -146,6 +152,8 @@ tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
 void thread_block (void);
 void thread_unblock (struct thread *);
+/** NEW ADDED HERE **/
+void thread_sleep (int64_t alarm);
 
 struct thread *thread_current (void);
 tid_t thread_tid (void);
@@ -181,7 +189,12 @@ struct child_info *find_child_info (struct thread *t, tid_t cid);
 struct file_desc {
   int fid;                  
   struct  file *fptr;       
-  struct hash_elem elem;    
+  struct hash_elem elem;
+
+/** NEW ADDED HERE **/
+  struct dir *dir_ptr;        /* Pointer to the opened directory */
+  bool isdir;                 /* is directory? */
+
 };
 
 struct id_addr {
