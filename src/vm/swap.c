@@ -9,6 +9,10 @@ int SEC_NUM = PGSIZE / BLOCK_SECTOR_SIZE;
 void swap_init(void)
 {
   sw = block_get_role(BLOCK_SWAP);
+  /** NEW ADDED HERE **/
+  if(swap == NULL){
+    return;
+  }
   sw_table = bitmap_create(block_size(sw)/SEC_NUM);
   lock_init(&sw_lock);
 }

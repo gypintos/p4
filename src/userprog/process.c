@@ -285,7 +285,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   char *save_ptr;
   file_name = strtok_r ((char *) file_name, " ", &save_ptr);
   /* Open executable file. */
-  file = filesys_open (file_name);
+  /** NEW ADDED HERE **/
+  //file = filesys_open (file_name);
+  filesys_open (file_name, &file, NULL, NULL);
+
   if (file == NULL)
     {
       printf ("load: %s: open failed\n", file_name);
@@ -372,7 +375,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
   lock_acquire(&ht_exec_to_threads_lock);
-  insert_exe_to_threads_entry(thread_current());
+  /** NEW ADDED HERE **/
+  // insert_exe_to_threads_entry(thread_current());
+  // should be : add_exec_threads_entry(thread_current(), file);
+  insert_exe_to_threads_entry(thread_current(), file);
+
   lock_release(&ht_exec_to_threads_lock);
   success = true;
 

@@ -19,6 +19,8 @@ struct dir_entry
     block_sector_t inode_sector;        /* Sector number of header. */
     char name[NAME_MAX + 1];            /* Null terminated file name. */
     bool in_use;                        /* In use or free? */
+    /** NEW ADDED HERE **/
+    bool isdir;                         /* Is directory? */
   };
 
 /* Creates a directory with space for ENTRY_CNT entries in the
@@ -117,17 +119,24 @@ lookup (const struct dir *dir, const char *name,
    a null pointer.  The caller must close *INODE. */
 bool
 dir_lookup (const struct dir *dir, const char *name,
-            struct inode **inode) 
+            struct inode **inode, bool *isdir) 
 {
   struct dir_entry e;
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
+  /** NEW ADDED HERE **/
+  inode_acquire_lock(dir_get_inode((struct dir *)dir));
 
-  if (lookup (dir, name, &e, NULL))
+  if (lookup (dir, name, &e, NULL)){
     *inode = inode_open (e.inode_sector);
+    /** NEW ADDED HERE **/
+    *isdir = e.isdir;
+  }
   else
     *inode = NULL;
+  /** NEW ADDED HERE **/
+  inode_release_lock(dir_get_inode((struct dir *)dir));
 
   return *inode != NULL;
 }
@@ -138,8 +147,9 @@ dir_lookup (const struct dir *dir, const char *name,
    Returns true if successful, false on failure.
    Fails if NAME is invalid (i.e. too long) or a disk or memory
    error occurs. */
+/** NEW ADDED HERE **/
 bool
-dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
+dir_add (struct dir *dir, const char *name, block_sector_t inode_sector,, bool isdir))
 {
   struct dir_entry e;
   off_t ofs;
@@ -151,6 +161,8 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   /* Check NAME for validity. */
   if (*name == '\0' || strlen (name) > NAME_MAX)
     return false;
+
+  inode_acquire_lock(dir_get_inode(dir));
 
   /* Check that NAME is not in use. */
   if (lookup (dir, name, NULL, NULL))
@@ -169,12 +181,22 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
       break;
 
   /* Write slot. */
+/** NEW ADDED HERE **/
+  memset(&e, 0, sizeof e);
+
   e.in_use = true;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
-  success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+
+/** NEW ADDED HERE **/
+  e.isdir = isdir;
+  success = inode_write_at (dir->inode, &e, sizeof e, ofs, /*lock acquired*/ true) == sizeof e;
+  
+  // success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
 
  done:
+  /** NEW ADDED HERE **/
+  inode_release_lock(dir_get_inode(dir));
   return success;
 }
 
@@ -188,9 +210,13 @@ dir_remove (struct dir *dir, const char *name)
   struct inode *inode = NULL;
   bool success = false;
   off_t ofs;
+  /** NEW ADDED HERE **/
+  struct dir *mydir = NULL;
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
+  /** NEW ADDED HERE **/
+  inode_acquire_lock(dir_get_inode(dir));
 
   /* Find directory entry. */
   if (!lookup (dir, name, &e, &ofs))
@@ -201,9 +227,21 @@ dir_remove (struct dir *dir, const char *name)
   if (inode == NULL)
     goto done;
 
+  /** NEW ADDED HERE **/
+  if (e.isdir) {
+    mydir = dir_open (inode);
+ /* if any of these conditions is true, the dir can't be removed */
+    if ((mydir == NULL) || dir_is_root (mydir) || !dir_is_empty (mydir)
+     || dir_in_use (mydir))
+      goto done;
+  }
+
+
   /* Erase directory entry. */
   e.in_use = false;
-  if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
+  // if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
+  /** NEW ADDED HERE **/
+  if (inode_write_at (dir->inode, &e, sizeof e, ofs, /*lock acquired*/ true) != sizeof e)
     goto done;
 
   /* Remove inode. */
@@ -211,6 +249,8 @@ dir_remove (struct dir *dir, const char *name)
   success = true;
 
  done:
+  /** NEW ADDED HERE **/
+  inode_release_lock(dir_get_inode(dir));
   inode_close (inode);
   return success;
 }
@@ -234,3 +274,52 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
     }
   return false;
 }
+
+
+
+/** NEW ADDED HERE **/
+
+
+/* Returns true if the given directory DIR is the root directory
+   otherwise false */
+bool
+dir_is_root (struct dir *dir)
+{
+  ASSERT (dir != NULL);
+  return inode_get_inumber (dir_get_inode (dir)) == ROOT_DIR_SECTOR;
+}
+
+/* Returns true if the given directory DIR contains no entries other
+   than "." and "..", otherwise false */
+bool
+dir_is_empty (struct dir *dir)
+{
+  struct dir_entry e;
+  size_t ofs;
+
+  ASSERT (dir != NULL);
+
+  for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+       ofs += sizeof e)
+  if (e.in_use
+      && (strcmp (".", e.name) != 0)
+    && (strcmp ("..", e.name) != 0))
+    return false;
+
+  return true;
+}
+
+/* Returns true if the given directory DIR is in use (i.e. opened by
+   a process). otherwise false */
+bool
+dir_in_use (struct dir *dir)
+{
+  ASSERT (dir != NULL);
+  struct inode* inode = dir_get_inode (dir);
+  int open_cnt = inode_get_open_cnt (inode);
+  /* To examine the DIR we have to open it first, therefore open count
+     is at least 1 */
+  ASSERT (open_cnt >= 1);
+  return (open_cnt > 1);
+}
+
