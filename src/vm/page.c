@@ -259,7 +259,7 @@ bool cmp_exec_name(const struct hash_elem *a, const struct hash_elem *b,
   struct exe_to_threads *r = hash_entry(b, struct exe_to_threads, hash_elem);
   // return hash_string(l->exe_key) < hash_string(r->exe_key);
   /** NEW ADDED HERE **/
-  return a->inumber <  b->inumber;
+  return l->inumber <  r->inumber;
 
 }
 
@@ -314,8 +314,8 @@ void delete_exe_to_threads_entry (struct thread *t)
 
   /** NEW ADDED HERE **/
   struct list_elem *e;
-  ASSERT (t->exec != NULL);
-  block_sector_t inumber = inode_get_inumber (file_get_inode (t->exec));
+  ASSERT (t->exe != NULL);
+  block_sector_t inumber = inode_get_inumber (file_get_inode (t->exe));
   /** NEW ADDED HERE **/
   struct exe_to_threads* etp = find_exe_to_threads_entry(inumber);
 
@@ -341,10 +341,10 @@ bool install_shared_page (struct page *p, bool lock) {
 
   /** NEW ADDED HERE **/
   struct thread *t = thread_current();
-  ASSERT (t->exec != NULL);
-  block_sector_t inumber = inode_get_inumber (file_get_inode (t->exec));
+  ASSERT (t->exe != NULL);
+  block_sector_t inumber = inode_get_inumber (file_get_inode (t->exe));
 
-  struct exe_to_threads *etp = find_exe_to_threads_entry(inumber;
+  struct exe_to_threads *etp = find_exe_to_threads_entry(inumber);
   if (etp != NULL){
     struct list_elem *e;
     for (e = list_begin(&etp->threads); e != list_end(&etp->threads); e = list_next(e)){
