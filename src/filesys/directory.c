@@ -149,7 +149,7 @@ dir_lookup (const struct dir *dir, const char *name,
    error occurs. */
 /** NEW ADDED HERE **/
 bool
-dir_add (struct dir *dir, const char *name, block_sector_t inode_sector,bool isdir))
+dir_add (struct dir *dir, const char *name, block_sector_t inode_sector,bool isdir)
 {
   struct dir_entry e;
   off_t ofs;
