@@ -116,7 +116,7 @@ struct inode
 
    /** NEW ADDED HERE **/
 static block_sector_t
-byte_to_sector (const struct inode *inode, off_t pos,  off_t growed_size)) 
+byte_to_sector (const struct inode *inode, off_t pos,  off_t growed_size) 
 {
   // ASSERT (inode != NULL);
   // if (pos < inode->data.length)
