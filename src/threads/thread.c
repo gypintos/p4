@@ -232,7 +232,7 @@ thread_create (const char *name, int priority,
     struct hash_elem *ect = hash_delete(&t->parent->children, &ci.elem);
     /** NEW ADDED HERE **/
     if (ect != NULL){
-      strcut child_info *ci_ = hash_entry(ect, struct child_info, elem);
+      struct child_info *ci_ = hash_entry(ect, struct child_info, elem);
       ci_->cid = tid;
       ci_->cthread = thread_current();
       hash_insert(&t->parent->children, &ci_->elem);
