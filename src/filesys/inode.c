@@ -448,7 +448,7 @@ inode_read_at (struct inode *inode, void *buffer, off_t size, off_t offset)
     lock_acquire(pre_read_lock_ptr);
     struct pre_read_elem *rae = malloc (sizeof(struct pre_read_elem));
     rae->sec_id = sector_idx;
-    list_push_back(&pre_read_queue, &rae->elem);
+    list_push_back(&pre_read_que, &rae->elem);
     cond_signal(pre_read_cond_ptr, pre_read_lock_ptr);
     lock_release(pre_read_lock_ptr);
   }
@@ -596,7 +596,7 @@ inode_write_at (struct inode *inode, const void *buffer, off_t size,
       lock_acquire(pre_read_lock_ptr);
       struct pre_read_elem *rae = malloc (sizeof(struct pre_read_elem));
       rae->sec_id = rae_sector_idx;
-      list_push_back(&pre_read_queue, &rae->elem);
+      list_push_back(&pre_read_que, &rae->elem);
       cond_signal(pre_read_cond_ptr, pre_read_lock_ptr);
       lock_release(pre_read_lock_ptr);
     }
