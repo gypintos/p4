@@ -344,7 +344,7 @@ int wait (tid_t pid) {
 bool create (const char *file_name, unsigned initial_size) {
     if(!file_name) exit(-1);
     //lock_acquire(&filesys_lock);
-    int result = filesys_create(file_name, initial_size);
+    int result = filesys_create(file_name, initial_size,false);
     //lock_release(&filesys_lock);
     return result;
 }
