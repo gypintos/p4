@@ -526,7 +526,7 @@ struct cache_elem *pick_ce (void) {
 	// hash_delete (&buf_ht, &ce_chosen->buf_hash_elem);
 	// hash_delete (&evic_buf_ht, &ce_chosen->evic_buf_hash_elem);
 	// return ce_chosen;
-	struct cache_elem result = NULL;
+	struct cache_elem *result = NULL;
 	if (ce_fst_clrd){
 		result = ce_fst_clrd;
 	} else {
