@@ -40,7 +40,26 @@ struct inode_disk
     block_sector_t ptr[INODE_BLOCK_PTRS];  /* Pointers to blocks */
     uint32_t unused[109];                  /* Not used. */
   };
-  
+
+  /** NEW ADDED HERE **/
+struct indirect_block
+  {
+    block_sector_t ptr[INDIRECT_BLOCK_PTRS];  /* Pointers to blocks */
+  };
+
+/* In-memory inode. */
+struct inode 
+  {
+    struct list_elem elem;              /* Element in inode list. */
+    block_sector_t sector;              /* Sector number of disk location. */
+    int open_cnt;                       /* Number of openers. */
+    bool removed;                       /* True if deleted, false otherwise. */
+    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+    // struct inode_disk data;             /* Inode content. */
+    /** NEW ADDED HERE **/
+    struct lock ilock;                  /* Lock */
+  };
+
 /* List of open inodes, so that opening a single inode twice
    returns the same `struct inode'. */
 static struct list open_inodes;
@@ -66,12 +85,6 @@ bytes_to_sectors (off_t size)
 {
   return DIV_ROUND_UP (size, BLOCK_SECTOR_SIZE);
 }
-
-/** NEW ADDED HERE **/
-struct indirect_block
-  {
-    block_sector_t ptr[INDIRECT_BLOCK_PTRS];  /* Pointers to blocks */
-  };
 
 
 /** NEW ADDED HERE **/
@@ -99,18 +112,6 @@ bytes_to_doubly_indirect_sector (off_t size)
 
 
 
-/* In-memory inode. */
-struct inode 
-  {
-    struct list_elem elem;              /* Element in inode list. */
-    block_sector_t sector;              /* Sector number of disk location. */
-    int open_cnt;                       /* Number of openers. */
-    bool removed;                       /* True if deleted, false otherwise. */
-    int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-    // struct inode_disk data;             /* Inode content. */
-    /** NEW ADDED HERE **/
-    struct lock ilock;                  /* Lock */
-  };
 
 /* Returns the block device sector that contains byte offset POS
    within INODE.
