@@ -6,8 +6,8 @@ bool ch_begin;
 
 struct cache_elem {
 	block_sector_t secId;
-	void *cache_addr;	
-	bool isDrty;					
+	void *ch_addr;	
+	bool isDirty;					
 	bool isUsed;				
 	unsigned pin_cnt;			
 	struct hash_elem buf_hash_elem;	

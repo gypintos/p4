@@ -448,7 +448,7 @@ struct cache_elem *cache_lookup (block_sector_t sector)
   struct cache_elem ce;
   struct hash_elem *e;
 
-  ce.sector = sector;
+  ce.secId = sector;
   e = hash_find (&buffer_cache, &ce.buf_hash_elem);
   return e != NULL ? hash_entry (e, struct cache_elem, buf_hash_elem) : NULL;
 }
