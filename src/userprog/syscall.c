@@ -42,7 +42,7 @@ void
 syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  lock_init(&filesys_lock);
+  // lock_init(&filesys_lock);
   sema_init(&sys_sema, 1);
 }
 
@@ -485,9 +485,9 @@ int write (int fd, const void *buffer, unsigned length) {
     } else {
         struct file *f_ptr = get_file_by_id(fd);
         if (f_ptr) {
-            lock_acquire(&filesys_lock);
+            // lock_acquire(&filesys_lock);
             length = file_write(f_ptr, buffer, length);
-            lock_release(&filesys_lock);
+            // lock_release(&filesys_lock);
             release_buf(buffer, length);
             return length;
         };
@@ -674,7 +674,7 @@ void munmap_helper (struct id_addr *id, struct thread *t) {
 
 /* Changes the current working directory of the process to dir, which
 +   may be relative or absolute. Returns true if successful, false on failure. */
-+static bool chdir (const char *dir) {
+static bool chdir (const char *dir) {
    bool success = filesys_chdir(dir);
    return success;
  }
