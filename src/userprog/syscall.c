@@ -430,14 +430,14 @@ void insert_fd(struct thread *t, struct file_desc *fd) {
 
 /** NEW ADDED HERE **/
  static struct dir * thread_fd_to_dir (int fd) {
-    struct fd_to_file ftf;
-    struct fd_to_file *ftf_ptr ;
+    struct file_desc ftf;
+    struct file_desc *ftf_ptr ;
     ftf.fd = fd;
     struct hash_elem *e = hash_find(&thread_current()->fds, &ftf.elem);
     if (e == NULL) {
         return NULL;
     }
-    ftf_ptr = hash_entry(e, struct fd_to_file, elem);
+    ftf_ptr = hash_entry(e, struct file_desc, elem);
     return ftf_ptr->dir_ptr;
  }
 
