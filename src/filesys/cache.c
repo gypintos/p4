@@ -56,38 +56,64 @@ void pre_read_cache (void *aux);
 
 void cache_buf_init (void) {
 	/* Allocate full cache */
+	// c_base = palloc_get_multiple(PAL_ZERO|PAL_ASSERT, BUF_SIZE_PAGE);
+	// /* Init bitmap to track cache usage */
+ //    c_map = bitmap_create(BUF_SIZE_BLOCK);
+	// /* Lock to operate on cache */
+	// lock_init(&c_map_lock);
+	// lock_init(&c_lock);
+	// cond_init(&cond_pin);
+	// /* Init hash table of cache contents */
+	// hash_init(&buf_ht, cache_hash_fun, cache_elem_cmp, NULL);
+	// /* Init hash table of for eviction algo */
+	// hash_init(&evic_buf_ht, evic_cache_hash_fun, evic_cache_elem_cmp, NULL);
+	// buf_clock_curr = buf_clock_min = c_base;
+	// buf_clock_max = c_base + (BUF_SIZE_BLOCK - 1) * BLOCK_SECTOR_SIZE;
+
+
+	// /* Thread that periodically writes back to disk */
+	// ch_teminate = false;
+	// ch_begin = true;
+
+	// lock_init(&pre_read_lock);
+	// pre_read_lock_ptr = &pre_read_lock;
+	// cond_init(&pre_read_cond);
+	// pre_read_cond_ptr = &pre_read_cond;
+	// list_init(&pre_read_que);
+
+	// /* Create read-ahead thread pool */
+	// int i = PRE_READ_POOL;
+	// while (i != 0) {
+	// 	thread_create("pre_read_" + i, PRI_DEFAULT, pre_read_cache, NULL);
+	// 	i--;
+	// }
+
 	c_base = palloc_get_multiple(PAL_ZERO|PAL_ASSERT, BUF_SIZE_PAGE);
-	/* Init bitmap to track cache usage */
-    c_map = bitmap_create(BUF_SIZE_BLOCK);
-	/* Lock to operate on cache */
+	c_map = bitmap_create(BUF_SIZE_BLOCK);
 	lock_init(&c_map_lock);
 	lock_init(&c_lock);
+	lock_init(&pre_read_lock);
 	cond_init(&cond_pin);
-	/* Init hash table of cache contents */
+	cond_init(&pre_read_cond);
 	hash_init(&buf_ht, cache_hash_fun, cache_elem_cmp, NULL);
-	/* Init hash table of for eviction algo */
 	hash_init(&evic_buf_ht, evic_cache_hash_fun, evic_cache_elem_cmp, NULL);
-	buf_clock_curr = buf_clock_min = c_base;
-	buf_clock_max = c_base + (BUF_SIZE_BLOCK - 1) * BLOCK_SECTOR_SIZE;
-
-
-	/* Thread that periodically writes back to disk */
+	list_init(&pre_read_que);
+	buf_clock_min = c_base;
+	buf_clock_curr = buf_clock_min;
+	buf_clock_max = c_base + (BUF_SIZE_BLOCK -1) * BLOCK_SECTOR_SIZE;
 	ch_teminate = false;
 	ch_begin = true;
-
-	lock_init(&pre_read_lock);
 	pre_read_lock_ptr = &pre_read_lock;
-	cond_init(&pre_read_cond);
 	pre_read_cond_ptr = &pre_read_cond;
-	list_init(&pre_read_que);
-
-	/* Create read-ahead thread pool */
+	
 	int i = PRE_READ_POOL;
-	while (i != 0) {
-		thread_create("read-ahead-" + i, PRI_DEFAULT, pre_read_cache, NULL);
+	while(i != 0){
+		thread_create("pre_read_" + i, PRI_DEFAULT, pre_read_cache, NULL);
 		i--;
 	}
-}
+
+}	
+
 
 
 /* Looks up cache entry for the given sector_idx, if
