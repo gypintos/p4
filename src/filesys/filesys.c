@@ -66,7 +66,7 @@ filesys_create (const char *name, off_t initial_size, bool isdir)
 
 
   // struct dir *dir = dir_open_root ();
-  bool success = (mydir != NULL
+  success = (mydir != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size)
                   && dir_add (mydir, myname, inode_sector, isdir));
@@ -95,7 +95,7 @@ filesys_create (const char *name, off_t initial_size, bool isdir)
   }
 
   done:
-  dir_close (dir);
+  dir_close (mydir);
 
   /** NEW ADDED HERE **/
   free(myname);
