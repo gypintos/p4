@@ -1,21 +1,18 @@
 #include "hash.h"
 #include "devices/block.h"
 
- /* Is cache infrastucture shut down? */
- bool cache_finish;
- /* Is cache infrastucture created? */
- bool cache_start;
+bool ch_teminate;
+bool ch_begin;
 
- /* Entry in the buffer cache */
- struct cache_entry {
-	 block_sector_t sector;			/* Sector id, which data stored in cache */
-	 void *cache_addr;				/* Kernel virtual address at which data is stored */
-	 bool dirty;					/* Has cache data been written to? */
-	 bool accessed;					/* Has cache data been accessed? */
-	 unsigned pin_count;			/* Is cached data actively in use? */
-	 struct hash_elem h_elem;		/* buffer_cache hash element */
-	 struct hash_elem ev_h_elem;	/* ev_buffer_cache hash element */
- };
+struct cache_elem {
+	block_sector_t secId;
+	void *cache_addr;	
+	bool isDrty;					
+	bool isUsed;				
+	unsigned pin_cnt;			
+	struct hash_elem buf_hash_elem;	
+	struct hash_elem evic_buf_hash_elem;	
+};
 
  /* Read-ahead task queue */
  struct list read_ahead_queue;
@@ -24,7 +21,7 @@
  struct read_ahead_entry {
 	 block_sector_t sector_idx;		/* Sector id to be read by read-ahead thread */
 	 struct list_elem elem;			/* read_ahead_queue list element */
-	 };
+	 };	
 
  /*	Pointer to read_ahead_av condition variable,
     on which read-ahead threads for tasks to be added to
