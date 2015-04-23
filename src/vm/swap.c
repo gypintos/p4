@@ -10,7 +10,7 @@ void swap_init(void)
 {
   sw = block_get_role(BLOCK_SWAP);
   /** NEW ADDED HERE **/
-  if(swap == NULL){
+  if(sw == NULL){
     return;
   }
   sw_table = bitmap_create(block_size(sw)/SEC_NUM);
