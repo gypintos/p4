@@ -216,7 +216,7 @@ syscall_handler (struct intr_frame *f)
            void *args[2];
            get_args(syscall, 2, args);
            char *buff_ptr = (char *)*(int *)args[1];
-           validate_buffer(buff_ptr, READDIR_MAX_LEN + 1, f->esp, true);
+           validate_buf(buff_ptr, READDIR_MAX_LEN + 1, f->esp, true);
            f->eax = readdir(*(int *)args[0], buff_ptr);
            release_args(syscall, 2, args);
            break;
@@ -738,7 +738,7 @@ static int inumber (int fd) {
        ASSERT (dir != NULL);
        return inode_get_inumber(dir_get_inode(dir));
    } else {
-       struct file *file = thread_fd_to_file(fd);
+       struct file *file = get_file_by_id(fd);
        ASSERT (file != NULL);
        return inode_get_inumber(file_get_inode(file));
    }
