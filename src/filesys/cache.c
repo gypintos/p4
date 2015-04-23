@@ -517,102 +517,132 @@ struct cache_elem *pick_ce (void) {
 		if (ce_fst_clrd || ce_fst_clrd_dirty ) continue;
 		cond_wait(&cond_pin, &c_lock);
 	}
-	struct cache_elem *ce_chosen = ce_fst_clrd != NULL ? ce_fst_clrd : ce_fst_clrd_dirty;
-	if (ce_chosen == ce_fst_clrd_dirty) {
-		/* Write from cache to filesystem */
-		cache_to_disk(ce_chosen);
-		ce_chosen->isDirty = false;
+	// struct cache_elem *ce_chosen = ce_fst_clrd != NULL ? ce_fst_clrd : ce_fst_clrd_dirty;
+	// if (ce_chosen == ce_fst_clrd_dirty) {
+	// 	/* Write from cache to filesystem */
+	// 	cache_to_disk(ce_chosen);
+	// 	ce_chosen->isDirty = false;
+	// }
+	// hash_delete (&buf_ht, &ce_chosen->buf_hash_elem);
+	// hash_delete (&evic_buf_ht, &ce_chosen->evic_buf_hash_elem);
+	// return ce_chosen;
+	struct cache_elem result = NULL;
+	if (ce_fst_clrd){
+		result = ce_fst_clrd;
+	} else {
+		result = ce_fst_clrd_dirty;
+		cache_to_disk(result);
+		result->isDirty = false;
 	}
-	hash_delete (&buf_ht, &ce_chosen->buf_hash_elem);
-	hash_delete (&evic_buf_ht, &ce_chosen->evic_buf_hash_elem);
-	return ce_chosen;
+	hash_delete (&buf_ht, &result->buf_hash_elem);
+	hash_delete (&evic_buf_ht, &result->evic_buf_hash_elem);
+	return result;
 }
 
 /* Returns a hash value for sector p. */
-unsigned
-cache_hash_fun (const struct hash_elem *p_, void *aux UNUSED)
+unsigned cache_hash_fun (const struct hash_elem *e, void *aux UNUSED)
 {
-  const struct cache_elem *p = hash_entry (p_, struct cache_elem, buf_hash_elem);
-  return p->secId;
+  const struct cache_elem *ce = hash_entry (e, struct cache_elem, buf_hash_elem);
+  return ce->secId;
 }
 
 /* Returns true if sector a precedes sector b. */
 bool
-cache_elem_cmp (const struct hash_elem *a_, const struct hash_elem *b_,
+cache_elem_cmp (const struct hash_elem *a, const struct hash_elem *b,
            void *aux UNUSED)
 {
-  const struct cache_elem *a = hash_entry (a_, struct cache_elem, buf_hash_elem);
-  const struct cache_elem *b = hash_entry (b_, struct cache_elem, buf_hash_elem);
-  return a->secId < b->secId;
+  const struct cache_elem *a_ = hash_entry (a, struct cache_elem, buf_hash_elem);
+  const struct cache_elem *b_ = hash_entry (b, struct cache_elem, buf_hash_elem);
+  return a_->secId < b_->secId;
 }
 
 /* Returns a hash value cache entry ce indexed by cache address. */
 unsigned
-evic_cache_hash_fun (const struct hash_elem *p_, void *aux UNUSED)
+evic_cache_hash_fun (const struct hash_elem *e, void *aux UNUSED)
 {
-  const struct cache_elem *ce = hash_entry (p_, struct cache_elem, evic_buf_hash_elem);
+  const struct cache_elem *ce = hash_entry (e, struct cache_elem, evic_buf_hash_elem);
   return (unsigned)ce->ch_addr;
 }
 
 /* Returns true if sector a precedes sector b. */
 bool
-evic_cache_elem_cmp (const struct hash_elem *a_, const struct hash_elem *b_,
+evic_cache_elem_cmp (const struct hash_elem *a, const struct hash_elem *b,
            void *aux UNUSED)
 {
-  const struct cache_elem *a = hash_entry (a_, struct cache_elem, evic_buf_hash_elem);
-  const struct cache_elem *b = hash_entry (b_, struct cache_elem, evic_buf_hash_elem);
-  return (unsigned)a->ch_addr < (unsigned)b->ch_addr;
+  const struct cache_elem *a_ = hash_entry (a, struct cache_elem, evic_buf_hash_elem);
+  const struct cache_elem *b_ = hash_entry (b, struct cache_elem, evic_buf_hash_elem);
+  return (unsigned)a_->ch_addr < (unsigned)b_->ch_addr;
 }
 
 /* Returns cache enry for the given sector, or NULL if sector
    is not in cache */
 struct cache_elem *find_cache_elem (block_sector_t sector)
 {
-  struct cache_elem ce;
-  struct hash_elem *e;
+  // struct cache_elem ce;
+  // struct hash_elem *e;
 
-  ce.secId = sector;
-  e = hash_find (&buf_ht, &ce.buf_hash_elem);
-  return e != NULL ? hash_entry (e, struct cache_elem, buf_hash_elem) : NULL;
+  // ce.secId = sector;
+  // e = hash_find (&buf_ht, &ce.buf_hash_elem);
+  // return e != NULL ? hash_entry (e, struct cache_elem, buf_hash_elem) : NULL;
+
+  struct cache_elem *ce = malloc(sizeof (struct cache_elem));
+  ce->secId = sector;
+  struct hash_elem* he = hash_find(&buf_ht, &ce->buf_hash_elem);
+  if (he){
+  	return hash_entry(he, struct cache_elem, buf_hash_elem);
+  } else {
+  	return NULL;
+  }
 }
 
 /* Returns cache enry for the given sector, or NULL if sector
    is not in cache */
 struct cache_elem *find_evic_cache_elem (void* ch_addr)
 {
-  struct cache_elem ce;
-  struct hash_elem *e;
+  // struct cache_elem ce;
+  // struct hash_elem *e;
 
-  ce.ch_addr = ch_addr;
-  e = hash_find (&evic_buf_ht, &ce.evic_buf_hash_elem);
-  return e != NULL ? hash_entry (e, struct cache_elem, evic_buf_hash_elem) : NULL;
+  // ce.ch_addr = ch_addr;
+  // e = hash_find (&evic_buf_ht, &ce.evic_buf_hash_elem);
+  // return e != NULL ? hash_entry (e, struct cache_elem, evic_buf_hash_elem) : NULL;
+
+  struct cache_elem *ce = malloc(sizeof (struct cache_elem));
+  ce->ch_addr = ch_addr;
+  struct hash_elem* he = hash_find(&evic_buf_ht, &ce->evic_buf_hash_elem);
+  if (he){
+  	return hash_entry(he, struct cache_elem, evic_buf_hash_elem);
+  } else {
+  	return NULL;
+  }
+
 }
 
 /* Returns a hash value for sector p. */
 void
-cache_destructor (struct hash_elem *ce_, void *aux UNUSED)
+cache_destructor (struct hash_elem *e, void *aux UNUSED)
 {
-  struct cache_elem *ce = hash_entry (ce_, struct cache_elem, buf_hash_elem);
+  struct cache_elem *ce = hash_entry (e, struct cache_elem, buf_hash_elem);
   free(ce);
 }
 
 /* Loads inode cache entry and keeps it pinned*/
 void *get_meta_inode (block_sector_t sec_id) {
 	/* Lookup and pin cache entry - c_lock */
-	 lock_acquire(&c_lock);
-	 struct cache_elem *ce = find_cache_elem (sec_id);
-	 if (ce != NULL) {
-		 ce->pin_cnt++;
-	 }
-	 lock_release(&c_lock);
+	lock_acquire(&c_lock);
+	struct cache_elem *ce = find_cache_elem (sec_id);
+	// if (ce != NULL) {
+	// 	ce->pin_cnt++;
+	// }
+ 	if (ce)	ce->pin_cnt++;
+	lock_release(&c_lock);
 
-	 /* Entry not found, create new */
-	 if (ce == NULL) {
-		 ce = load_sec_to_cache (sec_id, /* is readahead */ false);
-	 }
-	 
-
-	 return ce->ch_addr;
+	/* Entry not found, create new */
+	// if (ce == NULL) {
+	// 	ce = load_sec_to_cache (sec_id, /* is readahead */ false);
+	// }
+	if (!ce)
+		ce = load_sec_to_cache (sec_id, false);
+	return ce->ch_addr;
 }
 
 
@@ -622,10 +652,13 @@ void free_meta_inode (block_sector_t sec_id, bool dirty) {
 	 struct cache_elem *ce = find_cache_elem (sec_id);
 	 /* As it was pinned, should be always retrievable */
 	 ASSERT(ce != NULL);
+	 
+	 // ce->isDirty = ce->isDirty ? true : dirty;
+	 if (!ce->isDirty) ce->isDirty = dirty;
 	 ce->isUsed = true;
-	 ce->isDirty = ce->isDirty ? true : dirty;
 	 /* Signal to choosing for evict threads */
-	 if (--ce->pin_cnt == 0)
+	 ce->pin_cnt--;
+	 if (ce->pin_cnt == 0)
 		cond_signal(&cond_pin, &c_lock);
 	 lock_release(&c_lock);
 }
