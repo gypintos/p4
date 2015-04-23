@@ -19,8 +19,7 @@ struct dir_entry
     block_sector_t inode_sector;        /* Sector number of header. */
     char name[NAME_MAX + 1];            /* Null terminated file name. */
     bool in_use;                        /* In use or free? */
-    /** NEW ADDED HERE **/
-    bool isdir;                         /* Is directory? */
+    bool isdir;                         /* Directory or not */
   };
 
 /* Creates a directory with space for ENTRY_CNT entries in the
@@ -126,7 +125,9 @@ dir_lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
   /** NEW ADDED HERE **/
-  inode_acquire_lock(dir_get_inode((struct dir *)dir));
+  // inode_acquire_lock(dir_get_inode((struct dir *)dir));
+  struct inode* inp = dir_get_inode((struct dir *)dir);
+  inode_acquire_lock(inp);
 
   if (lookup (dir, name, &e, NULL)){
     *inode = inode_open (e.inode_sector);
@@ -136,8 +137,9 @@ dir_lookup (const struct dir *dir, const char *name,
   else
     *inode = NULL;
   /** NEW ADDED HERE **/
-  inode_release_lock(dir_get_inode((struct dir *)dir));
-
+  // inode_release_lock(dir_get_inode((struct dir *)dir));
+  inode_release_lock(inp);
+  
   return *inode != NULL;
 }
 
