@@ -309,9 +309,9 @@ struct cache_elem *load_sec_to_cache_after_evic (block_sector_t sector, bool isP
 
 	/* Initialize cache entry */
 	struct cache_elem *ce = malloc(sizeof (struct cache_elem));
-	ce->ch_addr = ce_evict->ch_addr;
 	ce->secId = sector;
 	ce->pin_cnt = 0;
+	ce->ch_addr = ce_evict->ch_addr;
 
 	/* Write sector to cache */
 	block_read(fs_device, sector, ce->ch_addr);
@@ -319,24 +319,42 @@ struct cache_elem *load_sec_to_cache_after_evic (block_sector_t sector, bool isP
 	/* Add entry to cache */
 	lock_acquire(&c_lock);
 	struct cache_elem *ce_ = find_cache_elem(sector);
-	if (ce_ == NULL) {
-		ce->pin_cnt += isPreRead ? 0 : 1;
+	// if (ce_ == NULL) {
+	// 	ce->pin_cnt += isPreRead ? 0 : 1;
+	// 	ce->isUsed = true;
+	// 	hash_insert(&buf_ht, &ce->buf_hash_elem);
+	// 	hash_insert(&evic_buf_ht, &ce->evic_buf_hash_elem);
+	// }
+	// else {
+	// 	ce_->pin_cnt += isPreRead ? 0 : 1;
+	// 	ce_->isUsed = true;
+	// 	lock_acquire(&c_map_lock);
+	// 	bitmap_set(c_map, (ce->ch_addr -c_base)/BLOCK_SECTOR_SIZE, false);
+	// 	lock_release(&c_map_lock);
+	// 	free(ce);
+	// }
+	if (ce_){
+		// ce_->pin_cnt += isPreRead ? 0 : 1;
+		if(!isPreRead) ce_->pin_cnt++;
+		ce_->isUsed = true;
+		lock_acquire(&c_map_lock);
+		bitmap_set(c_map, (ce->ch_addr - c_base) / BLOCK_SECTOR_SIZE, false);
+		lock_release(&c_map_lock);
+		free(ce);
+	} else {
+		// ce->pin_cnt += isPreRead ? 0 : 1;
+		if(!isPreRead) ce->pin_cnt++;
 		ce->isUsed = true;
 		hash_insert(&buf_ht, &ce->buf_hash_elem);
 		hash_insert(&evic_buf_ht, &ce->evic_buf_hash_elem);
 	}
-	else {
-		ce_->pin_cnt += isPreRead ? 0 : 1;
-		ce_->isUsed = true;
-		lock_acquire(&c_map_lock);
-		bitmap_set(c_map, (ce->ch_addr -c_base)/BLOCK_SECTOR_SIZE, false);
-		lock_release(&c_map_lock);
-		free(ce);
-	}
-	lock_release(&c_lock);
 
+	lock_release(&c_lock);
 	free(ce_evict);
-	return ce_ == NULL ? ce : ce_;
+
+	// return ce_ == NULL ? ce : ce_;
+	if (ce_) return ce_;
+	else return ce;
 }
 
 /* Read sector at given address from cache into given buffer*/
@@ -351,32 +369,46 @@ void cache_to_disk (struct cache_elem *ce) {
 
 void thread_cache_to_disk (void) {
   while(true) {
-	if (ch_begin) {
-		lock_acquire(&c_lock);
-		if (ch_teminate) {
-			lock_release(&c_lock);
-			break;
-		}
+	// if (ch_begin) {
+	// 	lock_acquire(&c_lock);
+	// 	if (ch_teminate) {
+	// 		lock_release(&c_lock);
+	// 		break;
+	// 	}
 
-		lock_release(&c_lock);
-		all_cache_to_disk(/* Exiting */ false);
-		thread_sleep(SLEEP_AFTER);
+	// 	lock_release(&c_lock);
+	// 	all_cache_to_disk(/* Exiting */ false);
+	// 	thread_sleep(SLEEP_AFTER);
+	// }
+	// else {
+	// 	thread_sleep(SLEEP_BEFORE);
+	// }
+	if (!ch_begin){
+		thread_sleep(SLEEP_BEFORE);
 	}
 	else {
-		thread_sleep(SLEEP_BEFORE);
+		lock_acquire(&c_lock);
+		if (ch_teminate){
+			lock_release(&c_lock);
+			break;
+		} else {
+			lock_release(&c_lock);
+			all_cache_to_disk(false);
+			thread_sleep(SLEEP_AFTER);
+		}
 	}
   }
 }
 
 void all_cache_to_disk (bool exiting) {
-    lock_acquire(&c_lock);
-	ch_teminate = exiting;
+	lock_acquire(&c_lock);
 	hash_first(&c_it, &buf_ht);
-	while (hash_next (&c_it)) {
+	ch_teminate = exiting;
+	while(hash_next (&c_it)){
 		struct cache_elem *ce = hash_entry (hash_cur(&c_it), struct cache_elem, buf_hash_elem);
 		if (ce->isDirty && (exiting || ce->pin_cnt == 0)) {
-			cache_to_disk(ce);
 			ce->isDirty = false;
+			cache_to_disk(ce);
 		}
 	}
 	lock_release(&c_lock);
