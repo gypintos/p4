@@ -52,8 +52,8 @@ struct hash_iterator cache_iter;
  struct condition pinned_cond;
 
  /* Read-ahead lock and condition variable */
- struct condition read_ahead_av;
- struct lock read_ahead_lock;
+ struct condition pre_read_cond;
+ struct lock pre_read_lock;
 
 /* Function definitions */
 unsigned
@@ -81,7 +81,7 @@ void read_ahead_cache (void *aux);
 
 
 /* Initialize bufer cache */
-void init_buffer_cache (void) {
+void cache_buf_init (void) {
 	/* Allocate full cache */
 	cache_base = palloc_get_multiple(PAL_ASSERT | PAL_ZERO, CACHE_SIZE_PG);
 	/* Init bitmap to track cache usage */
@@ -102,11 +102,11 @@ void init_buffer_cache (void) {
 	ch_teminate = false;
 	ch_begin = true;
 
-	lock_init(&read_ahead_lock);
-	read_ahead_lock_ptr = &read_ahead_lock;
-	cond_init(&read_ahead_av);
-	read_ahead_av_ptr = &read_ahead_av;
-	list_init(&read_ahead_queue);
+	lock_init(&pre_read_lock);
+	pre_read_lock_ptr = &pre_read_lock;
+	cond_init(&pre_read_cond);
+	pre_read_cond_ptr = &pre_read_cond;
+	list_init(&pre_read_queue);
 
 	/* Create read-ahead thread pool */
 	int i = READ_AHEAD_POOL;
@@ -150,18 +150,18 @@ void init_buffer_cache (void) {
 void read_ahead_cache (void *aux UNUSED) {
 	 while (!ch_teminate) {
 		 struct list_elem *e = NULL;
-		 lock_acquire(&read_ahead_lock);
+		 lock_acquire(&pre_read_lock);
 		 do {
-			 if (!list_empty(&read_ahead_queue)) {
-				e = list_pop_front(&read_ahead_queue);
+			 if (!list_empty(&pre_read_queue)) {
+				e = list_pop_front(&pre_read_queue);
 			 }
 			 else {
-				cond_wait(&read_ahead_av, &read_ahead_lock);
+				cond_wait(&pre_read_cond, &pre_read_lock);
 			 }
 		 } while (e == NULL);
-		 lock_release(&read_ahead_lock);
-		 struct read_ahead_entry *rae = list_entry(e, struct read_ahead_entry, elem);
-		 block_sector_t sector_idx = rae->sector_idx;
+		 lock_release(&pre_read_lock);
+		 struct pre_read_elem *rae = list_entry(e, struct pre_read_elem, elem);
+		 block_sector_t sector_idx = rae->sec_id;
 		 free(rae);
 
 		 lock_acquire(&cache_lock);
@@ -180,7 +180,7 @@ void read_ahead_cache (void *aux UNUSED) {
 }
 
  void
- write_to_cache (block_sector_t sector_idx, const void *buffer,
+ buf_to_cache (block_sector_t sector_idx, const void *buffer,
 				  int sector_ofs, int chunk_size) {
 	 /* Lookup and pin cache entry - cache_lock */
 	 lock_acquire(&cache_lock);
@@ -311,7 +311,7 @@ void write_to_disk (struct cache_elem *ce) {
 	block_write(fs_device, ce->secId, ce->ch_addr);
 }
 
-void write_all_cache_thread (void) {
+void thread_cache_to_disk (void) {
   while(true) {
 	if (ch_begin) {
 		lock_acquire(&cache_lock);
@@ -321,7 +321,7 @@ void write_all_cache_thread (void) {
 		}
 
 		lock_release(&cache_lock);
-		write_all_cache(/* Exiting */ false);
+		all_cache_to_disk(/* Exiting */ false);
 		thread_sleep(WRITE_ALL_SLEEP_AC);
 	}
 	else {
@@ -330,7 +330,7 @@ void write_all_cache_thread (void) {
   }
 }
 
-void write_all_cache (bool exiting) {
+void all_cache_to_disk (bool exiting) {
     lock_acquire(&cache_lock);
 	ch_teminate = exiting;
 	hash_first(&cache_iter, &buffer_cache);
@@ -474,7 +474,7 @@ cache_destructor (struct hash_elem *ce_, void *aux UNUSED)
 }
 
 /* Loads inode cache entry and keeps it pinned*/
-void *load_inode_metadata (block_sector_t sector_idx) {
+void *get_meta_inode (block_sector_t sector_idx) {
 	/* Lookup and pin cache entry - cache_lock */
 	 lock_acquire(&cache_lock);
 	 struct cache_elem *ce = cache_lookup (sector_idx);
@@ -494,7 +494,7 @@ void *load_inode_metadata (block_sector_t sector_idx) {
 
 
 /* Unpins inode cache entry */
-void release_inode_metadata (block_sector_t sector_idx, bool dirty) {
+void free_meta_inode (block_sector_t sector_idx, bool dirty) {
 	 lock_acquire(&cache_lock);
 	 struct cache_elem *ce = cache_lookup (sector_idx);
 	 /* As it was pinned, should be always retrievable */
@@ -507,7 +507,7 @@ void release_inode_metadata (block_sector_t sector_idx, bool dirty) {
 	 lock_release(&cache_lock);
 }
 
-void set_cache_exiting (void) {
+void cache_exit (void) {
 	lock_acquire(&cache_lock);
 	ch_teminate = true;
 	lock_release(&cache_lock);

@@ -129,7 +129,7 @@ main (void)
   /* Initialize file system. */
   ide_init ();
   locate_block_devices ();
-  init_buffer_cache ();
+  cache_buf_init ();
   filesys_init (format_filesys);
 #endif
 

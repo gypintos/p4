@@ -183,7 +183,7 @@ page_fault (struct intr_frame *f)
       exit (-1);
 
   if (user == false){
-    set_cache_exiting();
+    cache_exit();
     kill (f);
   }
 }

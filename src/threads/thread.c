@@ -149,7 +149,7 @@ thread_start (void)
 
   thread_create ("idle", PRI_MIN, idle, &idle_started);
 /** NEW ADDED HERE **/
-  thread_create ("cache-2-disk", PRI_DEFAULT, write_all_cache_thread, NULL);
+  thread_create ("cache-2-disk", PRI_DEFAULT, thread_cache_to_disk, NULL);
 
   /* Start preemptive thread scheduling. */
   intr_enable ();

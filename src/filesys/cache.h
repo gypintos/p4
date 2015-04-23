@@ -14,34 +14,26 @@ struct cache_elem {
 	struct hash_elem evic_buf_hash_elem;	
 };
 
- /* Read-ahead task queue */
- struct list read_ahead_queue;
+struct list pre_read_que;
+ 
+struct pre_read_elem {
+	block_sector_t sec_id;		
+	struct list_elem elem;
+};	
 
- /* Read-ahead task */
- struct read_ahead_entry {
-	 block_sector_t sector_idx;		/* Sector id to be read by read-ahead thread */
-	 struct list_elem elem;			/* read_ahead_queue list element */
-	 };	
+struct condition *pre_read_cond_ptr;
 
- /*	Pointer to read_ahead_av condition variable,
-    on which read-ahead threads for tasks to be added to
-	read_ahead_queue */
- struct condition *read_ahead_av_ptr;
+struct lock *pre_read_lock_ptr;
 
- /* Pointer to a lock guarding changes to read_ahead_queue
-    and read_ahead_av condition variable */
- struct lock *read_ahead_lock_ptr;
-
-/* Function declarations */
-void init_buffer_cache(void);
-void write_all_cache(bool exiting);
+void cache_buf_init(void);
+void all_cache_to_disk(bool exiting);
 void read_from_cache (block_sector_t sector_idx, void *buffer,
 				  int sector_ofs, int chunk_size);
 void
-write_to_cache (block_sector_t sector_idx, const void *buffer, int sector_ofs,
+buf_to_cache (block_sector_t sector_idx, const void *buffer, int sector_ofs,
 				 int chunk_size);
-void write_all_cache_thread (void);
+void thread_cache_to_disk (void);
 
-void *load_inode_metadata (block_sector_t sector_idx);
-void release_inode_metadata (block_sector_t sector_idx, bool dirty);
-void set_cache_exiting (void);
+void *get_meta_inode (block_sector_t sector_idx);
+void free_meta_inode (block_sector_t sector_idx, bool dirty);
+void cache_exit (void);
