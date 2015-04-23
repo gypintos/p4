@@ -326,8 +326,8 @@ is_dir_empty (struct dir *dir)
   size_t off = 0;
   while (inode_read_at(dir->inode, &de, sizeof de, off) == sizeof de){
     if (de.in_use && 
-        strcmp(".", e.name) != 0 &&
-        strcmp("..", e.name) != 0){
+        strcmp(".", de.name) != 0 &&
+        strcmp("..", de.name) != 0){
       return false;
     } 
     off += sizeof de;
