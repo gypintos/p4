@@ -73,7 +73,7 @@ struct cache_entry *ev_cache_lookup (void* cache_addr);
 struct cache_entry *put (block_sector_t sector, bool is_readahead);
 struct cache_entry *evict_and_put (block_sector_t sector, bool is_readahead);
 void get (const void *cache_addr, void *buffer, size_t read_bytes);
-void write (void *cache_addr, const void *buffer, size_t write_bytes);
+void write_to_sector (void *cache_addr, const void *buffer, size_t write_bytes);
 struct cache_entry *choose_cache_entry (void);
 
 void write_to_disk (struct cache_entry *ce);
@@ -196,7 +196,7 @@ void read_ahead_cache (void *aux UNUSED) {
 	 }
 
      /* Write to cache entry data*/
-	 write (ce->cache_addr + sector_ofs, buffer, chunk_size);
+	 write_to_sector (ce->cache_addr + sector_ofs, buffer, chunk_size);
 
 
 	 /* Update cache entry */
@@ -210,7 +210,7 @@ void read_ahead_cache (void *aux UNUSED) {
 }
 
 /* Write given buffer to sector at given address from cache */
-void write (void *cache_addr, const void *buffer, size_t write_bytes)
+void write_to_sector (void *cache_addr, const void *buffer, size_t write_bytes)
 {
 	memcpy(cache_addr, buffer, write_bytes);
 }
