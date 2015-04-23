@@ -432,7 +432,7 @@ void insert_fd(struct thread *t, struct file_desc *fd) {
  static struct dir * thread_fd_to_dir (int fd) {
     struct file_desc ftf;
     struct file_desc *ftf_ptr ;
-    ftf.fd = fd;
+    ftf.fid = fd;
     struct hash_elem *e = hash_find(&thread_current()->fds, &ftf.elem);
     if (e == NULL) {
         return NULL;
