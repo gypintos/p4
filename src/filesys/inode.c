@@ -22,21 +22,6 @@
 #define INODE_BLOCK_PTRS DOUBLY_INDIRECT_INDEX + DOUBLY_INDIRECT_BLOCKS
 #define INDIRECT_BLOCK_PTRS 128
 
-
-/** NEW ADDED HERE **/
-bool inode_alloc(struct inode_disk *disk_inode, off_t length);
-void inode_dealloc (struct inode_disk *disk_inode);
-void inode_dealloc_block (block_sector_t *sector, size_t size);
-size_t
-inode_extend_indirect_block (struct inode_disk *i_d, size_t sectors);
-size_t
-inode_extend_nested_block (struct inode_disk *i_d, size_t sectors,
-                           struct indirect_block *block);
-size_t
-inode_extend_doubly_indirect_block (struct inode_disk *i_d, size_t sectors);
-
-
-
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
@@ -55,6 +40,24 @@ struct inode_disk
     block_sector_t ptr[INODE_BLOCK_PTRS];  /* Pointers to blocks */
     uint32_t unused[109];                  /* Not used. */
   };
+  
+/* List of open inodes, so that opening a single inode twice
+   returns the same `struct inode'. */
+static struct list open_inodes;
+
+
+/** NEW ADDED HERE **/
+bool inode_alloc(struct inode_disk *disk_inode, off_t length);
+void inode_dealloc (struct inode_disk *disk_inode);
+void inode_dealloc_block (block_sector_t *sector, size_t size);
+size_t
+inode_extend_indirect_block (struct inode_disk *i_d, size_t sectors);
+size_t
+inode_extend_nested_block (struct inode_disk *i_d, size_t sectors,
+                           struct indirect_block *block);
+size_t
+inode_extend_doubly_indirect_block (struct inode_disk *i_d, size_t sectors);
+
 
 /* Returns the number of sectors to allocate for an inode SIZE
    bytes long. */
@@ -169,9 +172,6 @@ byte_to_sector (const struct inode *inode, off_t pos,  off_t growed_size)
 
 }
 
-/* List of open inodes, so that opening a single inode twice
-   returns the same `struct inode'. */
-static struct list open_inodes;
 
 
 
