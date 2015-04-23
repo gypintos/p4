@@ -116,23 +116,20 @@ void cache_buf_init (void) {
 
 
 
-/* Looks up cache entry for the given sector_idx, if
+/* Looks up cache entry for the given sec_id, if
    such entry no found in cache, adds it */
- void
- read_from_cache (block_sector_t sector_idx, void *buffer,
+void
+read_from_cache (block_sector_t sec_id, void *buffer,
 				  int sector_ofs, int chunk_size) {
      /* Lookup and pin cache entry - c_lock */
 	 lock_acquire(&c_lock);
-	 struct cache_elem *ce = find_cache_elem (sector_idx);
-	 if (ce != NULL) {
-		 ce->pin_cnt++;
-	 }
+	 struct cache_elem *ce = find_cache_elem (sec_id);
+	 if (ce) ce->pin_cnt++;
 	 lock_release(&c_lock);
 
 	 /* Entry not found, create new */
-	 if (ce == NULL) {
-		 ce = load_sec_to_cache (sector_idx, /* is readahead */ false);
-	 }
+	 if (!ce) 
+		 ce = load_sec_to_cache (sec_id, false);
 
 	 /* Read data to process buffer */
 	 read_sec_to_buf (ce->ch_addr + sector_ofs, buffer, chunk_size);
@@ -141,7 +138,8 @@ void cache_buf_init (void) {
 	 lock_acquire(&c_lock);
 	 ce->isUsed = true;
 	 /* Signal to choosing for evict threads */
-	 if (--ce->pin_cnt == 0)
+	 ce->pin_cnt--;
+	 if (ce->pin_cnt == 0)
 		cond_signal(&cond_pin, &c_lock);
 	 lock_release(&c_lock);
 }
@@ -150,40 +148,52 @@ void pre_read_cache (void *aux UNUSED) {
 	 while (!ch_teminate) {
 		 struct list_elem *e = NULL;
 		 lock_acquire(&pre_read_lock);
-		 do {
-			 if (!list_empty(&pre_read_que)) {
-				e = list_pop_front(&pre_read_que);
-			 }
-			 else {
-				cond_wait(&pre_read_cond, &pre_read_lock);
-			 }
-		 } while (e == NULL);
+		 // do {
+			//  if (!list_empty(&pre_read_que)) {
+			// 	e = list_pop_front(&pre_read_que);
+			//  }
+			//  else {
+			// 	cond_wait(&pre_read_cond, &pre_read_lock);
+			//  }
+		 // } while (e == NULL);
+		 while (!e){
+		 	if (list_empty(&pre_read_que)){
+		 		cond_wait(&pre_read_cond, &pre_read_lock);	
+		 	} else {
+		 		e = list_pop_front(&pre_read_que);
+		 	}
+		 }
 		 lock_release(&pre_read_lock);
-		 struct pre_read_elem *rae = list_entry(e, struct pre_read_elem, elem);
-		 block_sector_t sector_idx = rae->sec_id;
-		 free(rae);
+		 
+		 struct pre_read_elem *pre = list_entry(e, struct pre_read_elem, elem);
+		 block_sector_t sec_id = pre->sec_id;
+		 free(pre);
 
 		 lock_acquire(&c_lock);
-		 struct cache_elem *ce = find_cache_elem(sector_idx);
-		 if (ce != NULL) {
-
-			 lock_release(&c_lock);
-			 /* Late read-ahead.. Stop */
-			 continue;
+		 struct cache_elem *ce = find_cache_elem(sec_id);
+		 if (ce) {
+		 	lock_release(&c_lock);
+		 	continue;
 		 }
+		 // if (ce != NULL) {
+
+			//  lock_release(&c_lock);
+			//  /* Late read-ahead.. Stop */
+			//  continue;
+		 // }
 		 lock_release(&c_lock);
 
 		 /* Not in cache */
-		 ce = load_sec_to_cache (sector_idx, /* is readahead */ true);
+		 ce = load_sec_to_cache (sec_id, true);
 	 }
 }
 
  void
- buf_to_cache (block_sector_t sector_idx, const void *buffer,
+ buf_to_cache (block_sector_t sec_id, const void *buffer,
 				  int sector_ofs, int chunk_size) {
 	 /* Lookup and pin cache entry - c_lock */
 	 lock_acquire(&c_lock);
-	 struct cache_elem *ce = find_cache_elem(sector_idx);
+	 struct cache_elem *ce = find_cache_elem(sec_id);
 	 if (ce != NULL) {
 		 ce->pin_cnt++;
 	 }
@@ -191,7 +201,7 @@ void pre_read_cache (void *aux UNUSED) {
 
 	 /* Entry not found - add a new one */
 	 if (ce == NULL) {
-		 ce = load_sec_to_cache(sector_idx, /* is readahead */ false);
+		 ce = load_sec_to_cache(sec_id, /* is readahead */ false);
 	 }
 
      /* Write to cache entry data*/
@@ -473,10 +483,10 @@ cache_destructor (struct hash_elem *ce_, void *aux UNUSED)
 }
 
 /* Loads inode cache entry and keeps it pinned*/
-void *get_meta_inode (block_sector_t sector_idx) {
+void *get_meta_inode (block_sector_t sec_id) {
 	/* Lookup and pin cache entry - c_lock */
 	 lock_acquire(&c_lock);
-	 struct cache_elem *ce = find_cache_elem (sector_idx);
+	 struct cache_elem *ce = find_cache_elem (sec_id);
 	 if (ce != NULL) {
 		 ce->pin_cnt++;
 	 }
@@ -484,7 +494,7 @@ void *get_meta_inode (block_sector_t sector_idx) {
 
 	 /* Entry not found, create new */
 	 if (ce == NULL) {
-		 ce = load_sec_to_cache (sector_idx, /* is readahead */ false);
+		 ce = load_sec_to_cache (sec_id, /* is readahead */ false);
 	 }
 	 
 
@@ -493,9 +503,9 @@ void *get_meta_inode (block_sector_t sector_idx) {
 
 
 /* Unpins inode cache entry */
-void free_meta_inode (block_sector_t sector_idx, bool dirty) {
+void free_meta_inode (block_sector_t sec_id, bool dirty) {
 	 lock_acquire(&c_lock);
-	 struct cache_elem *ce = find_cache_elem (sector_idx);
+	 struct cache_elem *ce = find_cache_elem (sec_id);
 	 /* As it was pinned, should be always retrievable */
 	 ASSERT(ce != NULL);
 	 ce->isUsed = true;
