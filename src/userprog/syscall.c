@@ -196,43 +196,43 @@ syscall_handler (struct intr_frame *f)
         /** NEW ADDED HERE **/
         case SYS_CHDIR: {
            void *args[1];
-           retrieve_and_validate_args(syscall, 1, args);
+           get_args(syscall, 1, args);
            char *buff_ptr = (char *)*(int *)args[0];
-           validate_pointer(buff_ptr, f->esp, /* Writeable */ false);
+           validate_addr(buff_ptr, f->esp, /* Writeable */ false);
            f->eax = chdir(buff_ptr);
-           unlock_args_memory(syscall, 1, args);
+           release_args(syscall, 1, args);
            break;
        }
        case SYS_MKDIR: {
            void *args[1];
-           retrieve_and_validate_args(syscall, 1, args);
+           get_args(syscall, 1, args);
            char *buff_ptr = (char *)*(int *)args[0];
-           validate_pointer(buff_ptr, f->esp, /* Writeable */ false);
+           validate_addr(buff_ptr, f->esp, /* Writeable */ false);
            f->eax = mkdir(buff_ptr);
-           unlock_args_memory(syscall, 1, args);
+           release_args(syscall, 1, args);
            break;
        }
        case SYS_READDIR: {
            void *args[2];
-           retrieve_and_validate_args(syscall, 2, args);
+           get_args(syscall, 2, args);
            char *buff_ptr = (char *)*(int *)args[1];
            validate_buffer(buff_ptr, READDIR_MAX_LEN + 1, f->esp, true);
            f->eax = readdir(*(int *)args[0], buff_ptr);
-           unlock_args_memory(syscall, 2, args);
+           release_args(syscall, 2, args);
            break;
        }
        case SYS_ISDIR: {
            void *args[1];
-           retrieve_and_validate_args(syscall, 1, args);
+           get_args(syscall, 1, args);
            f->eax = isdir(*(int *)args[0]);
-           unlock_args_memory(syscall, 1, args);
+           release_args(syscall, 1, args);
            break;
        }
        case SYS_INUMBER: {
            void *args[1];
-           retrieve_and_validate_args(syscall, 1, args);
+           get_args(syscall, 1, args);
            f->eax = inumber(*(int *)args[0]);
-           unlock_args_memory(syscall, 1, args);
+           release_args(syscall, 1, args);
            break;
        } 
     }
@@ -439,6 +439,19 @@ void insert_fd(struct thread *t, struct file_desc *fd) {
     }
     ftf_ptr = hash_entry(e, struct file_desc, elem);
     return ftf_ptr->dir_ptr;
+ }
+
+ /* Returns true if a directory is opened as fd */
+ static bool thread_fd_is_dir (int fd) {
+    struct fd_to_file ftf;
+    struct fd_to_file *ftf_ptr ;
+    ftf.fd = fd;
+    struct hash_elem *e = hash_find(&thread_current()->fds, &ftf.elem);
+    if (e == NULL) {
+        return NULL;
+    }
+    ftf_ptr = hash_entry(e, struct fd_to_file, elem);
+    return ftf_ptr->isdir;
  }
 
 int read (int fd, void *buffer, unsigned length) {
