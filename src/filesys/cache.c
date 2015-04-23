@@ -106,7 +106,7 @@ void cache_buf_init (void) {
 	pre_read_lock_ptr = &pre_read_lock;
 	cond_init(&pre_read_cond);
 	pre_read_cond_ptr = &pre_read_cond;
-	list_init(&pre_read_queue);
+	list_init(&pre_read_que);
 
 	/* Create read-ahead thread pool */
 	int i = READ_AHEAD_POOL;
@@ -152,8 +152,8 @@ void read_ahead_cache (void *aux UNUSED) {
 		 struct list_elem *e = NULL;
 		 lock_acquire(&pre_read_lock);
 		 do {
-			 if (!list_empty(&pre_read_queue)) {
-				e = list_pop_front(&pre_read_queue);
+			 if (!list_empty(&pre_read_que)) {
+				e = list_pop_front(&pre_read_que);
 			 }
 			 else {
 				cond_wait(&pre_read_cond, &pre_read_lock);
