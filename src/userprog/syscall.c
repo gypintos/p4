@@ -360,7 +360,7 @@ int open (const char *file_name) {
     bool isdir = false;
 
     //lock_acquire(&filesys_lock);
-    filesys_open(file_name, &file_ptr, &dir_ptr, &isdir);
+    filesys_open(file_name, &f_ptr, &dir_ptr, &isdir);
 
     if (!isdir) {
         if (f_ptr == NULL){
