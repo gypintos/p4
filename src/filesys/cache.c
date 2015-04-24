@@ -421,86 +421,48 @@ struct cache_elem *pick_ce (void) {
 	struct cache_elem *ce_f = NULL;
 	struct cache_elem *ce_f_dirty = NULL;
 	
-	// while (ce_f == NULL && ce_f_dirty == NULL) {
-	while (!ce_f && !ce_f_dirty) {
-		// void *start = buf_clock_curr == buf_clock_min ? buf_clock_max : buf_clock_curr - BLOCK_SECTOR_SIZE;
-		void *start = NULL;
-		if (buf_clock_curr == buf_clock_min){
-			start = buf_clock_max;
-		} else {
-			start = buf_clock_curr - BLOCK_SECTOR_SIZE;
-		}
-		for (;buf_clock_curr != start;){
-		// while (buf_clock_curr != start) {
-			// if (buf_clock_curr >= buf_clock_max) {
-			// 	buf_clock_curr = buf_clock_min;
-			// }
-			buf_clock_curr = buf_clock_curr >= buf_clock_max ? buf_clock_min : buf_clock_curr; 
+	while (ce_fst_clrd == NULL && ce_fst_clrd_dirty == NULL) {
+		void *start = buf_clock_curr == buf_clock_min ? buf_clock_max : buf_clock_curr - BLOCK_SECTOR_SIZE;
+		while (buf_clock_curr != start) {
+			if (buf_clock_curr >= buf_clock_max) {
+				buf_clock_curr = buf_clock_min;
+			}
 			ce = find_evic_cache_elem(buf_clock_curr);
-			// if (ce == NULL) {
-			// 	buf_clock_curr += BLOCK_SECTOR_SIZE;
-			// 	continue;
-			// }
-			if (!ce){
+			if (ce == NULL) {
 				buf_clock_curr += BLOCK_SECTOR_SIZE;
 				continue;
 			}
-			// \\\\
-			// if (ce->isUsed) {
-			// 	ce->isUsed = false;
-			// 	if (ce->pin_cnt == 0) {
-			// 		if (!ce->isDirty && ce_f == NULL) {
-			// 			ce_f = ce;
-			// 		}
-			// 		else if (ce->isDirty && ce_f_dirty == NULL) {
-			// 			ce_f_dirty = ce;
-			// 		}
+			if (ce->isUsed) {
+				ce->isUsed = false;
+				if (ce->pin_cnt == 0) {
+					if (!ce->isDirty && ce_fst_clrd == NULL) {
+						ce_fst_clrd = ce;
+					}
+					else if (ce->isDirty && ce_fst_clrd_dirty == NULL) {
+						ce_fst_clrd_dirty = ce;
+					}
 
-			// 	}
-			// 	buf_clock_curr += BLOCK_SECTOR_SIZE;
-			// 	continue;
-			// }
-			// else {
-			// 	if (ce->pin_cnt != 0) {
-			// 		buf_clock_curr += BLOCK_SECTOR_SIZE;
-			// 		continue;
-			// 	}
-			// 	if (ce->isDirty) {
-			// 		/* Write from cache to filesystem */
-			// 		cache_to_disk(ce);
-			// 		ce->isDirty = false;
-			// 	}
-			// 	hash_delete (&buf_ht, &ce->buf_hash_elem);
-			// 	hash_delete (&evic_buf_ht, &ce->evic_buf_hash_elem);
-			// 	return ce;
-			// }\\\
-
-			if (!ce->isUsed){
-				if ( ce->pin_cnt == 0 && ce->isDirty){
-					cache_to_disk(ce);
-					ce->isDirty = false;
-				} 
-				if (ce->pin_cnt != 0){
+				}
+				buf_clock_curr += BLOCK_SECTOR_SIZE;
+				continue;
+			}
+			else {
+				if (ce->pin_cnt != 0) {
 					buf_clock_curr += BLOCK_SECTOR_SIZE;
 					continue;
 				}
-				hash_delete(&buf_ht, &ce->buf_hash_elem);
-				hash_delete(&evic_buf_ht, &ce->evic_buf_hash_elem);
-				return ce;
-			} else {
-				ce->isUsed = false;
-				if (ce->pin_cnt == 0){
-					if (ce->isDirty && !ce_f_dirty){
-						ce_f_dirty = ce;
-					} else if (!ce->isDirty && !ce_f){
-						ce_f = ce;
-					}
+				if (ce->isDirty) {
+					/* Write from cache to filesystem */
+					cache_to_disk(ce);
+					ce->isDirty = false;
 				}
-				buf_clock_curr += BLOCK_SECTOR_SIZE;
-				continue;
+				hash_delete (&buf_ht, &ce->buf_hash_elem);
+				hash_delete (&evic_buf_ht, &ce->evic_buf_hash_elem);
+				return ce;
 			}
 		}
-		if (ce_f || ce_f_dirty ) continue;
+
+		if (ce_fst_clrd != NULL || ce_fst_clrd_dirty != NULL) continue;
 		cond_wait(&cond_pin, &c_lock);
 	}
 	// struct cache_elem *ce_chosen = ce_f != NULL ? ce_f : ce_f_dirty;
