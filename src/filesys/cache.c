@@ -418,54 +418,93 @@ void all_cache_to_disk (bool exiting) {
 struct cache_elem *pick_ce (void) {
 	
 	struct cache_elem *ce;
-	struct cache_elem *ce_fst_clrd = NULL;
-	struct cache_elem *ce_fst_clrd_dirty = NULL;
+	struct cache_elem *ce_f = NULL;
+	struct cache_elem *ce_f_dirty = NULL;
 	
-	while (ce_fst_clrd == NULL && ce_fst_clrd_dirty == NULL) {
-		void *start = buf_clock_curr == buf_clock_min ? buf_clock_max : buf_clock_curr - BLOCK_SECTOR_SIZE;
-		while (buf_clock_curr != start) {
-			if (buf_clock_curr >= buf_clock_max) {
-				buf_clock_curr = buf_clock_min;
-			}
+	// while (ce_f == NULL && ce_f_dirty == NULL) {
+	while (!ce_f && !ce_f_dirty) {
+		// void *start = buf_clock_curr == buf_clock_min ? buf_clock_max : buf_clock_curr - BLOCK_SECTOR_SIZE;
+		void *start = NULL;
+		if (buf_clock_curr == buf_clock_min){
+			start = buf_clock_max;
+		} else {
+			start = buf_clock_curr - BLOCK_SECTOR_SIZE;
+		}
+		for (;buf_clock_curr != start;){
+		// while (buf_clock_curr != start) {
+			// if (buf_clock_curr >= buf_clock_max) {
+			// 	buf_clock_curr = buf_clock_min;
+			// }
+			buf_clock_curr = buf_clock_curr >= buf_clock_max ? buf_clock_min : buf_clock_curr; 
 			ce = find_evic_cache_elem(buf_clock_curr);
-			if (ce == NULL) {
+			// if (ce == NULL) {
+			// 	buf_clock_curr += BLOCK_SECTOR_SIZE;
+			// 	continue;
+			// }
+			if (!ce){
 				buf_clock_curr += BLOCK_SECTOR_SIZE;
 				continue;
 			}
-			if (ce->isUsed) {
-				ce->isUsed = false;
-				if (ce->pin_cnt == 0) {
-					if (!ce->isDirty && ce_fst_clrd == NULL) {
-						ce_fst_clrd = ce;
-					}
-					else if (ce->isDirty && ce_fst_clrd_dirty == NULL) {
-						ce_fst_clrd_dirty = ce;
-					}
+			// \\\\
+			// if (ce->isUsed) {
+			// 	ce->isUsed = false;
+			// 	if (ce->pin_cnt == 0) {
+			// 		if (!ce->isDirty && ce_f == NULL) {
+			// 			ce_f = ce;
+			// 		}
+			// 		else if (ce->isDirty && ce_f_dirty == NULL) {
+			// 			ce_f_dirty = ce;
+			// 		}
 
-				}
-				buf_clock_curr += BLOCK_SECTOR_SIZE;
-				continue;
-			}
-			else {
-				if (ce->pin_cnt != 0) {
+			// 	}
+			// 	buf_clock_curr += BLOCK_SECTOR_SIZE;
+			// 	continue;
+			// }
+			// else {
+			// 	if (ce->pin_cnt != 0) {
+			// 		buf_clock_curr += BLOCK_SECTOR_SIZE;
+			// 		continue;
+			// 	}
+			// 	if (ce->isDirty) {
+			// 		/* Write from cache to filesystem */
+			// 		cache_to_disk(ce);
+			// 		ce->isDirty = false;
+			// 	}
+			// 	hash_delete (&buf_ht, &ce->buf_hash_elem);
+			// 	hash_delete (&evic_buf_ht, &ce->evic_buf_hash_elem);
+			// 	return ce;
+			// }\\\
+
+			if (!ce->isUsed){
+				if ( ce->pin_cnt == 0 && ce->isDirty){
+					cache_to_disk(ce);
+					ce->isDirty = false;
+				} 
+				if (ce->pin_cnt != 0){
 					buf_clock_curr += BLOCK_SECTOR_SIZE;
 					continue;
 				}
-				if (ce->isDirty) {
-					/* Write from cache to filesystem */
-					cache_to_disk(ce);
-					ce->isDirty = false;
-				}
-				hash_delete (&buf_ht, &ce->buf_hash_elem);
-				hash_delete (&evic_buf_ht, &ce->evic_buf_hash_elem);
+				hash_delete(&buf_ht, &ce->buf_hash_elem);
+				hash_delete(&evic_buf_ht, &ce->evic_buf_hash_elem);
 				return ce;
+			} else {
+				ce->isUsed = false;
+				if (ce->pin_cnt == 0){
+					if (ce->isDirty && !ce_f_dirty){
+						ce_f_dirty = ce;
+					} else if (!ce->isDirty && !ce_f){
+						ce_f = ce;
+					}
+				}
+				buf_clock_curr += BLOCK_SECTOR_SIZE;
+				continue;
 			}
 		}
-		if (ce_fst_clrd != NULL || ce_fst_clrd_dirty != NULL) continue;
+		if (ce_f || ce_f_dirty ) continue;
 		cond_wait(&cond_pin, &c_lock);
 	}
-	// struct cache_elem *ce_chosen = ce_fst_clrd != NULL ? ce_fst_clrd : ce_fst_clrd_dirty;
-	// if (ce_chosen == ce_fst_clrd_dirty) {
+	// struct cache_elem *ce_chosen = ce_f != NULL ? ce_f : ce_f_dirty;
+	// if (ce_chosen == ce_f_dirty) {
 	// 	/* Write from cache to filesystem */
 	// 	cache_to_disk(ce_chosen);
 	// 	ce_chosen->isDirty = false;
@@ -474,10 +513,10 @@ struct cache_elem *pick_ce (void) {
 	// hash_delete (&evic_buf_ht, &ce_chosen->evic_buf_hash_elem);
 	// return ce_chosen;
 	struct cache_elem *result = NULL;
-	if (ce_fst_clrd){
-		result = ce_fst_clrd;
+	if (ce_f){
+		result = ce_f;
 	} else {
-		result = ce_fst_clrd_dirty;
+		result = ce_f_dirty;
 		cache_to_disk(result);
 		result->isDirty = false;
 	}
