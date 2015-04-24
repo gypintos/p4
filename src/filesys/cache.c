@@ -36,7 +36,7 @@ cache_hash_fun (const struct hash_elem *p_, void *aux);
 bool
 cache_elem_cmp (const struct hash_elem *a_, const struct hash_elem *b_, void *aux);
 void
-remove_cache_elem (struct hash_elem *ce_, void *aux UNUSED);
+cache_destructor (struct hash_elem *ce_, void *aux UNUSED);
 
 unsigned
 evic_cache_hash_fun (const struct hash_elem *p_, void *aux UNUSED);
@@ -55,6 +55,39 @@ void cache_to_disk (struct cache_elem *ce);
 void pre_read_cache (void *aux);
 
 void cache_buf_init (void) {
+	/* Allocate full cache */
+	// c_base = palloc_get_multiple(PAL_ZERO|PAL_ASSERT, BUF_SIZE_PAGE);
+	// /* Init bitmap to track cache usage */
+ //    c_map = bitmap_create(BUF_SIZE_BLOCK);
+	// /* Lock to operate on cache */
+	// lock_init(&c_map_lock);
+	// lock_init(&c_lock);
+	// cond_init(&cond_pin);
+	// /* Init hash table of cache contents */
+	// hash_init(&buf_ht, cache_hash_fun, cache_elem_cmp, NULL);
+	// /* Init hash table of for eviction algo */
+	// hash_init(&evic_buf_ht, evic_cache_hash_fun, evic_cache_elem_cmp, NULL);
+	// buf_clock_curr = buf_clock_min = c_base;
+	// buf_clock_max = c_base + (BUF_SIZE_BLOCK - 1) * BLOCK_SECTOR_SIZE;
+
+
+	// /* Thread that periodically writes back to disk */
+	// ch_teminate = false;
+	// ch_begin = true;
+
+	// lock_init(&pre_read_lock);
+	// pre_read_lock_ptr = &pre_read_lock;
+	// cond_init(&pre_read_cond);
+	// pre_read_cond_ptr = &pre_read_cond;
+	// list_init(&pre_read_que);
+
+	// /* Create read-ahead thread pool */
+	// int i = PRE_READ_POOL;
+	// while (i != 0) {
+	// 	thread_create("pre_read_" + i, PRI_DEFAULT, pre_read_cache, NULL);
+	// 	i--;
+	// }
+
 	c_base = palloc_get_multiple(PAL_ZERO|PAL_ASSERT, BUF_SIZE_PAGE);
 	c_map = bitmap_create(BUF_SIZE_BLOCK);
 	lock_init(&c_map_lock);
@@ -86,7 +119,7 @@ void cache_buf_init (void) {
 /* Looks up cache entry for the given sec_id, if
    such entry no found in cache, adds it */
 void
-lookup_cache (block_sector_t sec_id, void *buffer,
+read_from_cache (block_sector_t sec_id, void *buffer,
 				  int sector_ofs, int chunk_size) {
      /* Lookup and pin cache entry - c_lock */
 	 lock_acquire(&c_lock);
@@ -115,6 +148,14 @@ void pre_read_cache (void *aux UNUSED) {
 	 while (!ch_teminate) {
 		 struct list_elem *e = NULL;
 		 lock_acquire(&pre_read_lock);
+		 // do {
+			//  if (!list_empty(&pre_read_que)) {
+			// 	e = list_pop_front(&pre_read_que);
+			//  }
+			//  else {
+			// 	cond_wait(&pre_read_cond, &pre_read_lock);
+			//  }
+		 // } while (e == NULL);
 		 while (!e){
 		 	if (list_empty(&pre_read_que)){
 		 		cond_wait(&pre_read_cond, &pre_read_lock);	
@@ -134,6 +175,12 @@ void pre_read_cache (void *aux UNUSED) {
 		 	lock_release(&c_lock);
 		 	continue;
 		 }
+		 // if (ce != NULL) {
+
+			//  lock_release(&c_lock);
+			//  /* Late read-ahead.. Stop */
+			//  continue;
+		 // }
 		 lock_release(&c_lock);
 
 		 /* Not in cache */
@@ -147,9 +194,16 @@ buf_to_cache (block_sector_t sec_id, const void *buffer,
  /* Lookup and pin cache entry - c_lock */
 	lock_acquire(&c_lock);
 	struct cache_elem *ce = find_cache_elem(sec_id);
+	// if (ce != NULL) {
+	// 	ce->pin_cnt++;
+	// }
 	if (ce) ce->pin_cnt++;
 	lock_release(&c_lock);
 
+	/* Entry not found - add a new one */
+	// if (ce == NULL) {
+	// 	ce = load_sec_to_cache(sec_id, /* is readahead */ false);
+	// }
 	if (!ce)
 		ce = load_sec_to_cache(sec_id, false);
 
@@ -180,6 +234,13 @@ struct cache_elem *load_sec_to_cache (block_sector_t sector, bool isPreRead)
   /* Find and mark place in cache map - c_map_lock*/
   lock_acquire(&c_map_lock);
   size_t index = bitmap_scan (c_map, 0, 1, false);
+  // if (index == BITMAP_ERROR) {
+	 //  /* No free space - evict and load_sec_to_cache */
+	 //  lock_release(&c_map_lock);
+	 //  return load_sec_to_cache_after_evic(sector, isPreRead);
+  // }
+  // bitmap_set (c_map, index, true);
+  // lock_release(&c_map_lock);
   if (index != BITMAP_ERROR){
 	bitmap_set (c_map, index, true);
   	lock_release(&c_map_lock);
@@ -202,7 +263,22 @@ struct cache_elem *load_sec_to_cache (block_sector_t sector, bool isPreRead)
   /* Add into cache contents - c_lock*/
   lock_acquire(&c_lock);
   struct cache_elem *ce_ = find_cache_elem(sector);
+ //  if (ce_ == NULL) {
+	// ce->pin_cnt += isPreRead ? 0 : 1;
+	// ce->isUsed = true;
+	// hash_insert(&buf_ht, &ce->buf_hash_elem);
+	// hash_insert(&evic_buf_ht, &ce->evic_buf_hash_elem);
+ //  }
+ //  else {
+	// ce_->pin_cnt += isPreRead ? 0 : 1;
+	// ce_->isUsed = true;
+	// lock_acquire(&c_map_lock);
+	// bitmap_set (c_map, index, false);
+	// lock_release(&c_map_lock);
+	// free(ce);
+ //  }
   if (ce_){
+  	// ce_->pin_cnt += isPreRead ? 0 : 1;
   	if (!isPreRead) ce_->pin_cnt++;
 	ce_->isUsed = true;
 	lock_acquire(&c_map_lock);
@@ -210,6 +286,7 @@ struct cache_elem *load_sec_to_cache (block_sector_t sector, bool isPreRead)
 	lock_release(&c_map_lock);
 	free(ce);
   } else {
+  	// ce->pin_cnt += isPreRead ? 0 : 1;
   	if (!isPreRead) ce->pin_cnt++;
 	ce->isUsed = true;
 	hash_insert(&buf_ht, &ce->buf_hash_elem);
@@ -217,6 +294,7 @@ struct cache_elem *load_sec_to_cache (block_sector_t sector, bool isPreRead)
   }
 
   lock_release(&c_lock);
+  // return ce_ == NULL ? ce : ce_;
   if (ce_) return ce_;
   else return ce;
 }
@@ -241,7 +319,22 @@ struct cache_elem *load_sec_to_cache_after_evic (block_sector_t sector, bool isP
 	/* Add entry to cache */
 	lock_acquire(&c_lock);
 	struct cache_elem *ce_ = find_cache_elem(sector);
+	// if (ce_ == NULL) {
+	// 	ce->pin_cnt += isPreRead ? 0 : 1;
+	// 	ce->isUsed = true;
+	// 	hash_insert(&buf_ht, &ce->buf_hash_elem);
+	// 	hash_insert(&evic_buf_ht, &ce->evic_buf_hash_elem);
+	// }
+	// else {
+	// 	ce_->pin_cnt += isPreRead ? 0 : 1;
+	// 	ce_->isUsed = true;
+	// 	lock_acquire(&c_map_lock);
+	// 	bitmap_set(c_map, (ce->ch_addr -c_base)/BLOCK_SECTOR_SIZE, false);
+	// 	lock_release(&c_map_lock);
+	// 	free(ce);
+	// }
 	if (ce_){
+		// ce_->pin_cnt += isPreRead ? 0 : 1;
 		if(!isPreRead) ce_->pin_cnt++;
 		ce_->isUsed = true;
 		lock_acquire(&c_map_lock);
@@ -249,6 +342,7 @@ struct cache_elem *load_sec_to_cache_after_evic (block_sector_t sector, bool isP
 		lock_release(&c_map_lock);
 		free(ce);
 	} else {
+		// ce->pin_cnt += isPreRead ? 0 : 1;
 		if(!isPreRead) ce->pin_cnt++;
 		ce->isUsed = true;
 		hash_insert(&buf_ht, &ce->buf_hash_elem);
@@ -275,6 +369,20 @@ void cache_to_disk (struct cache_elem *ce) {
 
 void thread_cache_to_disk (void) {
   while(true) {
+	// if (ch_begin) {
+	// 	lock_acquire(&c_lock);
+	// 	if (ch_teminate) {
+	// 		lock_release(&c_lock);
+	// 		break;
+	// 	}
+
+	// 	lock_release(&c_lock);
+	// 	all_cache_to_disk(/* Exiting */ false);
+	// 	thread_sleep(SLEEP_AFTER);
+	// }
+	// else {
+	// 	thread_sleep(SLEEP_BEFORE);
+	// }
 	if (!ch_begin){
 		thread_sleep(SLEEP_BEFORE);
 	}
@@ -310,42 +418,12 @@ void all_cache_to_disk (bool exiting) {
 struct cache_elem *pick_ce (void) {
 	
 	struct cache_elem *ce;
-	struct cache_elem *cef = NULL;
-	struct cache_elem *cef_dirty = NULL;
+	struct cache_elem *ce_fst_clrd = NULL;
+	struct cache_elem *ce_fst_clrd_dirty = NULL;
 	
-	while (cef == NULL && cef_dirty == NULL) {
+	while (ce_fst_clrd == NULL && ce_fst_clrd_dirty == NULL) {
 		void *start = buf_clock_curr == buf_clock_min ? buf_clock_max : buf_clock_curr - BLOCK_SECTOR_SIZE;
 		while (buf_clock_curr != start) {
-<<<<<<< HEAD
-			buf_clock_curr = buf_clock_curr >= buf_clock_max ? buf_clock_min : buf_clock_curr;
-			ce = find_evic_cache_elem(buf_clock_curr);
-			if (ce) {
-				if (ce->isUsed) {
-					if (ce->pin_cnt == 0) {
-				
-						if (ce->isDirty && !cef_dirty) {
-							cef_dirty = ce;
-						} else if (!ce->isDirty && !cef) {
-							cef = ce;
-						}
-					}
-					buf_clock_curr += BLOCK_SECTOR_SIZE;
-					ce->isUsed = false;
-					continue;
-				} else {
-					if (ce->pin_cnt == 0) {
-						if (ce->isDirty) {
-							/* Write from cache to filesystem */
-							cache_to_disk(ce);
-							ce->isDirty = false;
-						}
-						hash_delete (&buf_ht, &ce->buf_hash_elem);
-						hash_delete (&evic_buf_ht, &ce->evic_buf_hash_elem);
-						return ce;
-					} else {
-						buf_clock_curr += BLOCK_SECTOR_SIZE;
-						continue;
-=======
 			if (buf_clock_curr >= buf_clock_max) {
 				buf_clock_curr = buf_clock_min;
 			}
@@ -362,7 +440,6 @@ struct cache_elem *pick_ce (void) {
 					}
 					else if (ce->isDirty && ce_fst_clrd_dirty == NULL) {
 						ce_fst_clrd_dirty = ce;
->>>>>>> parent of 192fde0... work1
 					}
 
 				}
@@ -384,16 +461,6 @@ struct cache_elem *pick_ce (void) {
 				return ce;
 			}
 		}
-<<<<<<< HEAD
-		if (cef || cef_dirty ) continue;
-		cond_wait(&cond_pin, &c_lock);
-	}
-	struct cache_elem *ce_chosen = cef != NULL ? cef : cef_dirty;
-	if (ce_chosen == cef_dirty) {
-		/* Write from cache to filesystem */
-		cache_to_disk(ce_chosen);
-		ce_chosen->isDirty = false;
-=======
 
 		if (ce_fst_clrd != NULL || ce_fst_clrd_dirty != NULL) continue;
 		cond_wait(&cond_pin, &c_lock);
@@ -414,7 +481,6 @@ struct cache_elem *pick_ce (void) {
 		result = ce_fst_clrd_dirty;
 		cache_to_disk(result);
 		result->isDirty = false;
->>>>>>> parent of 192fde0... work1
 	}
 	hash_delete (&buf_ht, &result->buf_hash_elem);
 	hash_delete (&evic_buf_ht, &result->evic_buf_hash_elem);
@@ -422,12 +488,7 @@ struct cache_elem *pick_ce (void) {
 }
 
 /* Returns a hash value for sector p. */
-<<<<<<< HEAD
-unsigned
-cache_hash_fun (const struct hash_elem *e, void *aux UNUSED)
-=======
 unsigned cache_hash_fun (const struct hash_elem *e, void *aux UNUSED)
->>>>>>> parent of 192fde0... work1
 {
   const struct cache_elem *ce = hash_entry (e, struct cache_elem, buf_hash_elem);
   return ce->secId;
@@ -435,20 +496,12 @@ unsigned cache_hash_fun (const struct hash_elem *e, void *aux UNUSED)
 
 /* Returns true if sector a precedes sector b. */
 bool
-<<<<<<< HEAD
-cache_elem_cmp (const struct hash_elem *a_, const struct hash_elem *b_,
-           void *aux UNUSED){
-  const struct cache_elem *a = hash_entry (a_, struct cache_elem, buf_hash_elem);
-  const struct cache_elem *b = hash_entry (b_, struct cache_elem, buf_hash_elem);
-  return a->secId < b->secId;
-=======
 cache_elem_cmp (const struct hash_elem *a, const struct hash_elem *b,
            void *aux UNUSED)
 {
   const struct cache_elem *a_ = hash_entry (a, struct cache_elem, buf_hash_elem);
   const struct cache_elem *b_ = hash_entry (b, struct cache_elem, buf_hash_elem);
   return a_->secId < b_->secId;
->>>>>>> parent of 192fde0... work1
 }
 
 /* Returns a hash value cache entry ce indexed by cache address. */
@@ -480,16 +533,6 @@ struct cache_elem *find_cache_elem (block_sector_t sector)
   // e = hash_find (&buf_ht, &ce.buf_hash_elem);
   // return e != NULL ? hash_entry (e, struct cache_elem, buf_hash_elem) : NULL;
 
-<<<<<<< HEAD
-	struct cache_elem *ce = malloc(sizeof (struct cache_elem));
-  	ce->secId = sector;
-	struct hash_elem* he = hash_find(&buf_ht, &ce->buf_hash_elem);
-	if (he){
-		return hash_entry(he, struct cache_elem, buf_hash_elem);
-	} else {
-		return NULL;
-	}
-=======
   struct cache_elem *ce = malloc(sizeof (struct cache_elem));
   ce->secId = sector;
   struct hash_elem* he = hash_find(&buf_ht, &ce->buf_hash_elem);
@@ -498,7 +541,6 @@ struct cache_elem *find_cache_elem (block_sector_t sector)
   } else {
   	return NULL;
   }
->>>>>>> parent of 192fde0... work1
 }
 
 /* Returns cache enry for the given sector, or NULL if sector
@@ -511,17 +553,6 @@ struct cache_elem *find_evic_cache_elem (void* ch_addr)
   // ce.ch_addr = ch_addr;
   // e = hash_find (&evic_buf_ht, &ce.evic_buf_hash_elem);
   // return e != NULL ? hash_entry (e, struct cache_elem, evic_buf_hash_elem) : NULL;
-<<<<<<< HEAD
-
-	struct cache_elem *ce = malloc(sizeof (struct cache_elem));
-  	ce->ch_addr = ch_addr;
-  	struct hash_elem* he = hash_find(&evic_buf_ht, &ce->evic_buf_hash_elem);
-  	if (he){
-  		return hash_entry(he, struct cache_elem, evic_buf_hash_elem);
-  	} else {
-  		return NULL;
-  	}
-=======
 
   struct cache_elem *ce = malloc(sizeof (struct cache_elem));
   ce->ch_addr = ch_addr;
@@ -532,20 +563,13 @@ struct cache_elem *find_evic_cache_elem (void* ch_addr)
   	return NULL;
   }
 
->>>>>>> parent of 192fde0... work1
 }
 
 /* Returns a hash value for sector p. */
 void
-<<<<<<< HEAD
-remove_cache_elem (struct hash_elem *ce_, void *aux UNUSED)
-{
-  struct cache_elem *ce = hash_entry(ce_, struct cache_elem, buf_hash_elem);
-=======
 cache_destructor (struct hash_elem *e, void *aux UNUSED)
 {
   struct cache_elem *ce = hash_entry (e, struct cache_elem, buf_hash_elem);
->>>>>>> parent of 192fde0... work1
   free(ce);
 }
 
@@ -554,14 +578,6 @@ void *get_meta_inode (block_sector_t sec_id) {
 	/* Lookup and pin cache entry - c_lock */
 	lock_acquire(&c_lock);
 	struct cache_elem *ce = find_cache_elem (sec_id);
-<<<<<<< HEAD
-	if (ce) ce->pin_cnt++;
-	lock_release(&c_lock);
-
-	/* Entry not found, create new */
-	if (!ce) 
-		ce = load_sec_to_cache (sec_id, /* is readahead */ false);
-=======
 	// if (ce != NULL) {
 	// 	ce->pin_cnt++;
 	// }
@@ -574,38 +590,21 @@ void *get_meta_inode (block_sector_t sec_id) {
 	// }
 	if (!ce)
 		ce = load_sec_to_cache (sec_id, false);
->>>>>>> parent of 192fde0... work1
 	return ce->ch_addr;
 }
 
 
 /* Unpins inode cache entry */
 void free_meta_inode (block_sector_t sec_id, bool dirty) {
-	 // lock_acquire(&c_lock);
-	 // struct cache_elem *ce = find_cache_elem (sec_id);
-	 // /* As it was pinned, should be always retrievable */
-	 // ASSERT(ce != NULL);
-	 // ce->isUsed = true;
-	 // ce->isDirty = ce->isDirty ? true : dirty;
-	 // /* Signal to choosing for evict threads */
-	 // if (--ce->pin_cnt == 0)
-		// cond_signal(&cond_pin, &c_lock);
-	 // lock_release(&c_lock);
-
 	 lock_acquire(&c_lock);
 	 struct cache_elem *ce = find_cache_elem (sec_id);
+	 /* As it was pinned, should be always retrievable */
 	 ASSERT(ce != NULL);
-<<<<<<< HEAD
- 
-	 if (!ce->isDirty) ce->isDirty = dirty;
-	 ce->isUsed = true;
-=======
 	 
 	 // ce->isDirty = ce->isDirty ? true : dirty;
 	 if (!ce->isDirty) ce->isDirty = dirty;
 	 ce->isUsed = true;
 	 /* Signal to choosing for evict threads */
->>>>>>> parent of 192fde0... work1
 	 ce->pin_cnt--;
 	 if (ce->pin_cnt == 0)
 		cond_signal(&cond_pin, &c_lock);
