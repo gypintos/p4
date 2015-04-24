@@ -418,8 +418,8 @@ void all_cache_to_disk (bool exiting) {
 struct cache_elem *pick_ce (void) {
 	
 	struct cache_elem *ce;
-	struct cache_elem *ce_f = NULL;
-	struct cache_elem *ce_f_dirty = NULL;
+	struct cache_elem *ce_fst_clrd = NULL;
+	struct cache_elem *ce_fst_clrd_dirty = NULL;
 	
 	while (ce_fst_clrd == NULL && ce_fst_clrd_dirty == NULL) {
 		void *start = buf_clock_curr == buf_clock_min ? buf_clock_max : buf_clock_curr - BLOCK_SECTOR_SIZE;
